@@ -72,6 +72,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '数据与导出' }
   },
   {
+    path: '/import',
+    name: 'import',
+    component: () => import('@/views/ImportView.vue'),
+    meta: { title: '批量导入' }
+  },
+  {
     path: '/about',
     name: 'about',
     component: () => import('@/views/AboutView.vue'),

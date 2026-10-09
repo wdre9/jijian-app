@@ -30,10 +30,14 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor/android": "^6.2.2",
+    "@capacitor/cli": "^6.2.2",
+    "@capacitor/core": "^6.2.2",
     "echarts": "^5.5.1",
     "html2canvas": "^1.4.1",
     "localforage": "^1.10.0",
     "pinia": "^2.2.6",
+    "tesseract.js": "^7.0.0",
     "vant": "^4.9.15",
     "vue": "^3.5.13",
     "vue-echarts": "^7.0.3",

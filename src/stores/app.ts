@@ -15,6 +15,8 @@ export interface RecordInput {
   worker: string
   shift: 'day' | 'night'
   note: string
+  /** 可选：金额覆盖（批量导入时三位小数原样存储；缺省按 数量×单价 重算两位） */
+  amount?: number
 }
 
 export const useAppStore = defineStore('app', () => {
@@ -102,7 +104,7 @@ export const useAppStore = defineStore('app', () => {
       processId: input.processId,
       quantity: round(input.quantity, 2),
       price: round(input.price, 4),
-      amount: calcAmount(input.quantity, input.price),
+      amount: input.amount !== undefined ? round(input.amount, 3) : calcAmount(input.quantity, input.price),
       worker: input.worker || '',
       shift: input.shift,
       note: input.note || '',
@@ -130,7 +132,7 @@ export const useAppStore = defineStore('app', () => {
       processId: input.processId,
       quantity: round(input.quantity, 2),
       price: round(input.price, 4),
-      amount: calcAmount(input.quantity, input.price),
+      amount: input.amount !== undefined ? round(input.amount, 3) : calcAmount(input.quantity, input.price),
       worker: input.worker || '',
       shift: input.shift,
       note: input.note || '',
