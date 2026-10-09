@@ -53,11 +53,11 @@ jobs:
           if [ -n "$JIJIAN_KEYSTORE_B64" ]; then
             echo "$JIJIAN_KEYSTORE_B64" | base64 -d > android/keystore.jks
             cat > android/keystore.properties <<EOF
-storeFile=keystore.jks
-storePassword=$JIJIAN_STORE_PASSWORD
-keyAlias=$JIJIAN_KEY_ALIAS
-keyPassword=$JIJIAN_KEY_PASSWORD
-EOF
+          storeFile=keystore.jks
+          storePassword=$JIJIAN_STORE_PASSWORD
+          keyAlias=$JIJIAN_KEY_ALIAS
+          keyPassword=$JIJIAN_KEY_PASSWORD
+          EOF
             echo "keystore prepared from secrets"
           else
             echo "no JIJIAN_KEYSTORE_B64 secret; building unsigned release APK"
