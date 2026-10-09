@@ -1,9 +1,9 @@
-# 计件工资记账 · 移动端 PWA
+# 计件工资记账 · Android APP
 
 Looking for the English version? Click [here](README.en.md).
 
-一个面向车间/工厂计件场景的**移动端记账 Web App（PWA）**：手机浏览器打开即可使用，
-**无需安装、无需登录、数据全部保存在本机浏览器（IndexedDB）**，断网也能继续用。
+一个面向车间/工厂计件场景的**本地记账 Android 应用**：拿到 APK 安装即可用，
+**无需联网、无需登录、数据全部保存在手机本地**（应用内 IndexedDB），断网也能继续记账。
 
 > 功能范围：快速记账、明细筛选、多维度统计图表、一键导出 Excel/CSV、本地备份与还原、深浅色主题。
 >
@@ -11,13 +11,15 @@ Looking for the English version? Click [here](README.en.md).
 > **无任何关联**，双方不存在合作、授权、隶属或其他关系；此处提及「安心计件」仅作为同类手机计件
 > 记账工具的功能对照说明，不含任何对比评价或优劣指向。
 
-> **使用前请先看**：本应用是 PWA，把它「添加到主屏幕」（安装到桌面）后即可获得独立窗口、
-> 离线可用、桌面启动图标等接近原生 App 的体验，各平台入口不同：
-> Android 用 **Chrome**（右上角「⋮」→ 添加到主屏幕），iPhone / iPad 用 **Safari**
-> （底部分享按钮 → 添加到主屏幕），电脑用 **Chrome / Edge**（地址栏安装图标，或菜单里的
-> 「安装页面为应用」）；微信、QQ 等应用的内置浏览器无法添加，请改用系统浏览器打开。
-> 本应用数据只保存在本机浏览器中，**清理缓存或站点数据可能导致数据丢失**，请定期导出备份。
-> 各平台的详细步骤见下方「[添加到主屏幕](#添加到主屏幕)」章节。
+> **使用前请先看**：本应用数据只保存在本机应用沙盒中，**卸载应用或清除应用数据会导致数据丢失**，
+> 请定期在「我的 → 数据与导出 → 导出备份」中保存 `.json` 备份文件。备份格式与网页版（PWA）
+> 互通，可在任意一端导出、另一端导入。
+
+## 安装方式
+
+在 [Releases](https://github.com/wdre9/jijian-app/releases) 页面下载最新的 `app-debug.apk` 安装包，
+传到手机后点击安装即可。Android 默认会拦截「未知来源应用」，按提示允许本次安装即可
+（各品牌手机位置不同：设置 → 安全 / 更多设置 → 允许安装未知应用）。
 
 ## 截图预览
 
@@ -49,6 +51,7 @@ Looking for the English version? Click [here](README.en.md).
 
 | 类别 | 选型 |
 | --- | --- |
+| 应用壳 | Capacitor 6（Android WebView，`appId=com.wdre9.jijian`） |
 | 构建 | Vite 5 |
 | 框架 | Vue 3（`<script setup>` + TypeScript） |
 | 路由 | Vue Router 4（Hash 模式，静态托管免配置） |
@@ -57,39 +60,46 @@ Looking for the English version? Click [here](README.en.md).
 | 本地存储 | localForage（IndexedDB，带降级） |
 | 图表 | ECharts 5 + vue-echarts（按需注册） |
 | 导出 | xlsx（Excel）、原生 Blob（CSV/JSON）、html2canvas（统计长图） |
-| PWA | vite-plugin-pwa（自动更新 Service Worker、离线预缓存、可添加到主屏幕，安装说明见「添加到主屏幕」章节） |
+| OCR 导入 | tesseract.js（本地识别，图片文字不出设备） |
+| 打包 | Android Gradle Plugin 8.2.1 / Gradle 8.2.1，minSdk 22 / compileSdk 34 |
 
 ---
 
 ## 二、目录结构
 
 ```
-jijian-pwa/
-├─ index.html                 # 入口 HTML（含启动闪屏）
-├─ vite.config.ts             # Vite 配置：base './'、PWA 清单、分包、别名 '@'
+jijian-app/
+├─ android/                    # Capacitor 生成的 Android 工程
+│  ├─ app/                     # 应用模块（build.gradle、AndroidManifest、MainActivity）
+│  ├─ gradle/wrapper/          # Gradle Wrapper
+│  ├─ gradlew / gradlew.bat    # Linux / Windows 构建脚本
+│  ├─ build.gradle / settings.gradle / variables.gradle
+│  └─ capacitor.settings.gradle
+├─ .github/workflows/build-android.yml  # 自动构建 APK 并发布 Release 的工作流
+├─ capacitor.config.ts         # Capacitor 配置（appId / appName / webDir）
+├─ index.html                  # 入口 HTML（含启动闪屏）
+├─ vite.config.ts              # Vite 配置：base './'、分包、别名 '@'
 ├─ tsconfig.json / tsconfig.node.json
 ├─ package.json
-├─ .github/workflows/deploy.yml   # GitHub Pages 自动构建部署工作流
-├─ public/                    # PWA 图标、favicon
+├─ public/                     # 应用图标、favicon
 └─ src/
-   ├─ main.ts                 # 应用挂载、Vant 注册、移除闪屏
-   ├─ App.vue                 # 根壳：主题、TabBar 显隐、路由出口
-   ├─ router/index.ts         # 路由表（4 个 Tab + 记录/产品/工人/数据/关于等子页）
-   ├─ stores/app.ts           # Pinia：记录、产品、工序、工人、设置的增删改查与备份还原
-   ├─ db/index.ts             # localForage 持久层、默认设置、导入导出
-   ├─ types/index.ts          # 领域模型类型定义
+   ├─ main.ts                  # 应用挂载、Vant 注册、移除闪屏
+   ├─ App.vue                  # 根壳：主题、TabBar 显隐、路由出口
+   ├─ router/index.ts          # 路由表（4 个 Tab + 记录/产品/工人/数据/关于等子页）
+   ├─ stores/app.ts            # Pinia：记录、产品、工序、工人、设置的增删改查与备份还原
+   ├─ db/index.ts              # localForage 持久层、默认设置、导入导出
+   ├─ types/index.ts           # 领域模型类型定义
    ├─ utils/
-   │  ├─ date.ts              # 本地时区日期工具（今日/区间/周月/偏移）
-   │  ├─ format.ts            # 金额、数量、日期格式化
-   │  ├─ stats.ts             # 聚合统计：按产品/工序/工人/班次/日期、日均、最佳日、分桶
-   │  ├─ exporter.ts          # Excel / CSV / JSON 导出
-   │  ├─ platform.ts          # 运行环境识别（平台 / 浏览器 / 应用内置浏览器 / 独立窗口模式）
-   │  └─ install.ts           # 「添加到主屏幕」引导内容、显示偏好与最近备份时间
-   ├─ components/             # TabBar、分段控件、空状态、统计块、日期选择、记录项、快速记账弹层、
-   │                          # 安装引导弹层（InstallGuideSheet）与首页安装提示卡片（InstallTipCard）
-   ├─ views/                  # 首页、明细、统计、我的、记录编辑/详情、产品、产品详情、工人、数据、关于
-   ├─ plugins/echarts.ts      # ECharts 按需注册
-   └─ styles/                 # 主题变量（浅色/深色）与全局样式
+   │  ├─ date.ts               # 本地时区日期工具（今日/区间/周月/偏移）
+   │  ├─ format.ts             # 金额、数量、日期格式化
+   │  ├─ stats.ts              # 聚合统计：按产品/工序/工人/班次/日期、日均、最佳日、分桶
+   │  ├─ exporter.ts           # Excel / CSV / JSON 导出
+   │  ├─ importer.ts           # 批量导入：文本解析 + 图片 OCR
+   │  └─ platform.ts           # 运行环境识别
+   ├─ components/              # TabBar、分段控件、空状态、统计块、日期选择、记录项、快速记账弹层
+   ├─ views/                   # 首页、明细、统计、我的、记录编辑/详情、产品、产品详情、工人、数据、关于、批量导入
+   ├─ plugins/echarts.ts       # ECharts 按需注册
+   └─ styles/                  # 主题变量（浅色/深色）与全局样式
 ```
 
 ---
@@ -112,129 +122,79 @@ jijian-pwa/
 - 每日（区间 >62 天自动按月）收入趋势图、产品占比饼图、工序收入排行、工人收入排行
 - 一键导出统计长图（PNG）与统计 Excel（明细 + 5 张汇总表）
 
+**批量导入**
+- 粘贴文本解析：识别「日期 / 货号 / 工序 / ×数量×单价=金额」格式，逐行校对后一键入库
+- 图片 OCR：拍照或选择截图，本地识别文字后转成记录，可逐行修改
+
 **我的**
 - 产品与工序管理（增删改、单价设置、规格）
 - 工人管理（从记录中维护常用工人名单）
 - 数据与导出：Excel / CSV / 汇总报表 / 备份 JSON / 导入还原 / 演示数据 / 清空
 - 主题切换（跟随系统 / 浅色 / 深色）、默认工人、记住上次选择
-- 添加到手机主屏幕：按当前设备与浏览器给出对应入口的分步引导，支持一键复制应用网址、
-  直接调用浏览器原生安装；已处于独立窗口模式时自动隐藏
-- 关于页展示当前环境的添加步骤与数据备份说明
 
 ---
 
 ## 四、开发与构建
 
+### 环境要求
+
+| 依赖 | 说明 |
+| --- | --- |
+| Node.js 18+ | 前端构建（本项目在 Node 24 / npm 11 下验证通过） |
+| JDK 17 | Android Gradle Plugin 8.x 要求 |
+| Android SDK | `platforms;android-34`、`build-tools;34.0.0`，配置 `ANDROID_HOME` |
+
+### 本地构建 APK
+
 ```powershell
-npm install          # 安装依赖
-npm run dev          # 开发模式 http://localhost:5173（已开启 host，手机同局域网可访问）
-npm run type-check   # TypeScript 类型检查
+npm install          # 安装依赖（含 Capacitor）
 npm run build        # 类型检查 + 生产构建，产物在 dist/
-npm run preview      # 本地预览构建产物 http://localhost:4173
+npx cap sync android # 将 dist 同步进 Android 工程
+cd android
+.\gradlew.bat assembleDebug   # Windows 构建
+# Linux/macOS: ./gradlew assembleDebug
 ```
 
-要求 Node.js 18+（本项目在 Node 24 / npm 11 下验证通过）。
+产物路径：`android/app/build/outputs/apk/debug/app-debug.apk`
+
+### 常用命令
+
+```powershell
+npm run dev          # 开发模式 http://localhost:5173（手机同局域网可访问）
+npm run type-check   # TypeScript 类型检查
+npx cap open android # 用 Android Studio 打开工程（调试、真机运行）
+```
 
 ---
 
-## 五、部署
+## 五、自动构建与发布
 
-部署到 GitHub Pages 的完整步骤见项目外层交付的 **《GitHub-Pages-部署说明.md》**。
-线上地址：https://wdre9.github.io/jijian-pwa/
+仓库已配置 GitHub Actions 工作流（`.github/workflows/build-android.yml`）：
 
-简要说明：
+- 推送 `main` 分支：自动构建 debug APK（不上传 Release）
+- 推送 `v*` 标签：自动构建 debug APK 并创建 GitHub Release、上传安装包
 
-- 仓库的 Pages 来源为 **`gh-pages` 分支**（Settings → Pages → Deploy from a branch），
-  把 `dist/` 内的文件提交到该分支根目录即完成发布；
-- 也可改用 `.github/workflows/deploy.yml`（GitHub Actions 方案）：推到 `main` 后，
-  在 Settings → Pages 选择 **GitHub Actions** 即可自动构建部署，两种方式选其一即可；
-- 构建配置为 `base: './'`，部署在仓库子路径下也能正常访问；
-- `dist/.nojekyll` 用于关闭 GitHub Pages 的 Jekyll 处理。
+发布新版本的流程：
+
+```powershell
+git tag -a v1.1.0 -m "描述"
+git push origin v1.1.0
+```
+
+构建完成后到 [Releases](https://github.com/wdre9/jijian-app/releases) 页面即可下载 APK。
 
 ---
 
 ## 六、数据说明
 
-- 所有数据仅保存在当前浏览器的 IndexedDB 中，**不上传任何服务器**；
-- 更换设备、更换浏览器或清理浏览器数据会造成数据丢失，请定期
+- 所有数据仅保存在本机应用沙盒内的 IndexedDB 中，**不上传任何服务器**；
+- 卸载应用、清除应用数据会造成数据丢失，请定期
   「我的 → 数据与导出 → 导出备份」保存 `.json` 备份文件；
-- 备份文件包含全部记录、产品、工序、工人与设置，导入即可完整恢复。
-
-## 添加到主屏幕
-
-本项目是 PWA（渐进式 Web 应用）。添加到主屏幕（安装到桌面）后，它会以独立窗口运行、
-支持离线使用，并在桌面生成启动图标，体验接近原生 App；不添加也能使用，但始终只是
-浏览器里的一个普通网页。
-
-**为什么建议添加**
-
-- 独立窗口：没有地址栏与浏览器菜单，界面更像一个 App；
-- 离线可用：Service Worker 预缓存页面资源，断网也能记账、查看数据；
-- 启动更快：从桌面图标一键进入；
-- 数据归属不变：仍保存在当前浏览器的 IndexedDB 中，用同一个浏览器打开才能看到原有数据。
-
-应用内已内置安装引导：首页会显示一条提示卡片，也可以随时打开「我的 → 添加到手机主屏幕」，
-引导会按当前设备与浏览器给出对应的入口路径；已经处于独立窗口模式时不再显示该引导。
-
-### 一、Android 手机
-
-**Chrome 浏览器（推荐）**
-
-1. 用 Chrome 打开站点：https://wdre9.github.io/jijian-pwa/
-2. 点击右上角的「⋮」菜单。
-3. 向下滑动，选择「添加到主屏幕」（部分版本显示为「安装应用」）。
-4. 按提示确认后，桌面出现应用图标，之后从该图标启动即可。
-
-页面顶部出现「安装应用」提示条时，直接点「安装」效果相同。若菜单里没有该选项，
-先下拉刷新并等页面完全加载，再打开菜单重试。
-
-**微信 / QQ / 钉钉 / 飞书等内置浏览器（无法添加）**
-
-内置浏览器没有独立窗口，也不能生成桌面图标。请点右上角「…」菜单，选择「在浏览器打开」；
-若没有这一项，先「复制链接」，再用 Chrome 打开并粘贴网址访问，然后按上面的 Chrome 步骤添加。
-
-**其它浏览器（UC / 夸克 / 小米 / 华为 / 三星等）**
-
-可在浏览器菜单里找「添加到主屏幕 / 添加到桌面 / 安装应用」，名称因浏览器而异；
-找不到该选项，或添加后离线不可用时，请改用 Chrome 打开本页重新添加。
-
-### 二、iPhone / iPad
-
-**Safari（iOS 上唯一支持添加的浏览器）**
-
-1. 用 Safari 打开站点：https://wdre9.github.io/jijian-pwa/
-2. 点击底部工具栏中间的「分享」按钮（iPad 在顶部）。
-3. 在分享面板中向下滑动，选择「添加到主屏幕」。
-4. 点右上角「添加」，桌面出现图标。
-
-**非 Safari 浏览器（Chrome、Edge、微信等）**
-
-iOS 上的浏览器都基于 WebKit，但只有 Safari 支持「添加到主屏幕」。请先复制网址，
-再用 Safari 打开并粘贴访问，然后按上面的步骤添加。
-
-### 三、电脑（Windows / macOS）
-
-**Chrome / Edge（适合查看报表与导出数据）**
-
-1. 用 Chrome 或 Edge 打开站点：https://wdre9.github.io/jijian-pwa/
-2. 点地址栏右侧的安装图标（Edge 显示为「应用可用」小方块），或从菜单安装：
-   Chrome「⋮」→「投放、保存和分享」→「安装页面为应用」；
-   Edge「…」→「应用」→「将此站点安装为应用」。
-3. 点「安装」，之后可从桌面或开始菜单启动本应用。
-
-其它桌面浏览器（Firefox、Safari 等）不支持安装为应用，请改用 Chrome 或 Edge。
-日常记账建议在手机上添加到主屏幕，电脑端主要用于查看统计与导出数据。
-
-### 四、数据安全提示
-
-- 本应用运行在浏览器中，数据保存在当前浏览器的 IndexedDB 里，不上传任何服务器；
-- 浏览器或系统清理缓存、清理站点数据（含存储空间不足时的自动清理）时，可能一并清除
-  这些数据，且无法恢复；
-- 请定期通过「我的 → 数据与导出 → 导出备份」保存 `.json` 备份文件，并另存到手机以外的地方
-  （电脑、云盘）；「数据与导出」页会显示最近一次备份时间，超过 7 天或从未备份时会醒目提醒；
-- 在清除浏览器缓存、卸载浏览器、更换设备或更换浏览器之前，请先导出备份；
-- 更换浏览器（例如从微信内置浏览器改用 Chrome）相当于换了存储空间，原数据不会自动带过去，
-  请先在原环境导出备份，再到新环境用「导入还原」恢复。
+- 备份文件包含全部记录、产品、工序、工人与设置，导入即可完整恢复；
+- 备份格式与网页版（[jijian-pwa](https://github.com/wdre9/jijian-pwa)）**完全互通**：
+  在 App 中导出的备份可在 PWA 中导入，反之亦然；
+- 两版数据各自独立存储：App 数据在应用沙盒，PWA 数据在浏览器 IndexedDB，
+  互不干扰，需通过备份文件互通。
 
 ---
 
@@ -246,7 +206,7 @@ iOS 上的浏览器都基于 WebKit，但只有 Safari 支持「添加到主屏�
 - [行为准则](CODE_OF_CONDUCT.md)：社区交流的基本约定
 - [安全政策](SECURITY.md)：漏洞上报方式与处理时限
 
-问题反馈请使用 Issue 模板：https://github.com/wdre9/jijian-pwa/issues/new/choose
+问题反馈请使用 Issue 模板：https://github.com/wdre9/jijian-app/issues/new/choose
 代码变更请按 Pull Request 模板填写变更说明与验证方式。
 
 ---
