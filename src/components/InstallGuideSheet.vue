@@ -37,7 +37,8 @@
         <div class="backup">
           <div class="backup__t">数据备份提醒</div>
           <div class="backup__d">
-            全部数据只保存在本机浏览器（IndexedDB）中，清理缓存或站点数据可能一并清除且无法恢复。
+            <template v-if="env.nativeApp">全部数据只保存在本机应用内，卸载应用会清除数据且无法恢复。</template>
+            <template v-else>全部数据只保存在本机浏览器（IndexedDB）中，清理缓存或站点数据可能一并清除且无法恢复。</template>
             <template v-if="backupText">最近一次备份：{{ backupText }}。</template>
             <template v-else>目前还没有导出过备份，建议现在导出一份。</template>
           </div>
@@ -72,6 +73,7 @@ import {
   closeInstallGuide,
   copyCurrentUrl,
   dismissInstallTipForever,
+  env,
   guide,
   installGuideVisible,
   installPromptReady,

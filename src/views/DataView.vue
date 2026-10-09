@@ -42,7 +42,10 @@
             <div class="gitem__l">工人</div>
           </div>
         </div>
-        <div class="fs-12 text-3 mt-8">数据存储于本机浏览器（IndexedDB），关闭网页不丢失。</div>
+        <div class="fs-12 text-3 mt-8">
+          <template v-if="env.nativeApp">数据存储于本机应用内，关闭应用不会丢失；卸载应用前请先导出备份。</template>
+          <template v-else>数据存储于本机浏览器（IndexedDB），关闭网页不丢失。</template>
+        </div>
       </div>
 
       <!-- 导出明细 -->
@@ -100,8 +103,8 @@
         <div class="bak" :class="{ 'bak--warn': needBackupReminder }">
           <div class="bak__t">{{ backupText ? '最近备份：' + backupText : '还没有导出过备份' }}</div>
           <div class="bak__d">
-            数据只保存在本机浏览器，清理缓存或站点数据（含存储空间不足时的自动清理）可能一并清除且无法恢复；
-            建议每周导出一次，并保存到电脑或网盘。
+            <template v-if="env.nativeApp">数据只保存在本机应用内，卸载应用会一并清除且无法恢复；建议每周导出一次，并保存到电脑或网盘。</template>
+            <template v-else>数据只保存在本机浏览器，清理缓存或站点数据（含存储空间不足时的自动清理）可能一并清除且无法恢复；建议每周导出一次，并保存到电脑或网盘。</template>
           </div>
           <div v-if="!env.nativeApp" class="bak__more" @click="openInstallGuide">
             查看「添加到主屏幕」与数据备份说明 <van-icon name="arrow" size="11" />

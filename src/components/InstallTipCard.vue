@@ -4,7 +4,7 @@
     <div class="tip__main">
       <div class="tip__title">添加到手机主屏幕</div>
       <div class="tip__desc">{{ guide.shortHint }}</div>
-      <div class="tip__desc tip__desc--warn">
+      <div v-if="!env.nativeApp" class="tip__desc tip__desc--warn">
         数据只保存在本机浏览器，清理缓存会丢失，请定期导出备份。
       </div>
       <div class="tip__actions">
@@ -19,6 +19,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import {
+  env,
   guide,
   openInstallGuide,
   showInstallTip,

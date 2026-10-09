@@ -77,7 +77,8 @@
       </van-cell-group>
 
       <div class="fs-12 text-3 mt-16" style="text-align: center; padding: 6px 0 10px">
-        所有数据仅保存在本机浏览器中，不上传服务器
+        <template v-if="env.nativeApp">所有数据仅保存在本机应用中，不上传服务器</template>
+        <template v-else>所有数据仅保存在本机浏览器中，不上传服务器</template>
       </div>
     </div>
   </div>
