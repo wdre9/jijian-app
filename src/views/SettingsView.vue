@@ -66,8 +66,9 @@
         <van-cell title="工人管理" is-link :value="`${store.workerOptions.length} 人`" @click="go('/workers')" />
         <van-cell title="批量导入" is-link label="粘贴文本 / 图片 OCR 批量入账" @click="go('/import')" />
         <van-cell title="数据与导出" is-link label="导出 Excel / 备份与还原" @click="go('/data')" />
-        <van-cell title="关于" is-link label="版本信息与安装到桌面" @click="go('/about')" />
+        <van-cell title="关于" is-link :label="env.nativeApp ? '版本信息' : '版本信息与安装到桌面'" @click="go('/about')" />
         <van-cell
+          v-if="!env.nativeApp"
           title="添加到手机主屏幕"
           is-link
           :label="installLabel"

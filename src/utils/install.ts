@@ -94,6 +94,7 @@ export const lastBackupAt = computed(() => prefs.value.lastBackupAt)
 
 /** 是否需要在首页显示安装 / 备份提示卡片 */
 export const showInstallTip = computed(() => {
+  if (env.value.nativeApp) return false
   if (env.value.standalone) return false
   if (prefs.value.installTipDismissed) return false
   return Date.now() >= prefs.value.installTipSnoozeUntil

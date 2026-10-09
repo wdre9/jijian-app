@@ -34,6 +34,8 @@ export interface EnvInfo {
   inApp: boolean
   /** 是否已处于独立窗口模式（已添加到主屏幕 / 已安装为应用） */
   standalone: boolean
+  /** 是否运行在 Capacitor 原生 App（Android APK / iOS 壳）中 */
+  nativeApp: boolean
 }
 
 function ua(): string {
@@ -55,6 +57,30 @@ export function isStandalone(): boolean {
       ? document.referrer.indexOf('android-app://') === 0
       : false
   return legacy || fromApp
+}
+
+/** 是否运行在 Capacitor 原生 App（Android APK 等）中 */
+export function isNativeApp(): boolean {
+  if (typeof window === 'undefined') return false
+  const w = window as unknown as {
+    Capacitor?: { isNativePlatform?: unknown; getPlatform?: () => string }
+  }
+  const cap = w.Capacitor
+  if (cap) {
+    try {
+      if (typeof cap.isNativePlatform === 'function') {
+        const r = (cap.isNativePlatform as () => boolean | Promise<boolean>)()
+        if (typeof r === 'boolean') return r
+      } else if (typeof cap.getPlatform === 'function') {
+        const p = cap.getPlatform()
+        return p === 'android' || p === 'ios'
+      }
+    } catch {
+      /* 忽略 */
+    }
+  }
+  // 兜底：Android WebView UA（Capacitor 壳内 WebView 无 Chrome 标识）
+  return /; wv\)|WebView|wv\//i.test(ua())
 }
 
 function detectPlatform(s: string): { platform: PlatformKind; label: string } {
@@ -105,5 +131,14 @@ export function detectEnv(): EnvInfo {
   const s = ua()
   const { platform, label: platformLabel } = detectPlatform(s)
   const { browser, label: browserLabel, inApp } = detectBrowser(s)
-  return { platform, browser, platformLabel, browserLabel, inApp, standalone: isStandalone() }
+  const nativeApp = isNativeApp()
+  return {
+    platform,
+    browser,
+    platformLabel,
+    browserLabel,
+    inApp,
+    standalone: nativeApp || isStandalone(),
+    nativeApp
+  }
 }

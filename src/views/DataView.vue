@@ -103,9 +103,10 @@
             数据只保存在本机浏览器，清理缓存或站点数据（含存储空间不足时的自动清理）可能一并清除且无法恢复；
             建议每周导出一次，并保存到电脑或网盘。
           </div>
-          <div class="bak__more" @click="openInstallGuide">
+          <div v-if="!env.nativeApp" class="bak__more" @click="openInstallGuide">
             查看「添加到主屏幕」与数据备份说明 <van-icon name="arrow" size="11" />
           </div>
+          <div v-else class="bak__more">备份与还原见下方「导出 / 备份与还原」操作区</div>
         </div>
         <div class="btns">
           <van-button plain block round size="small" @click="exportBackup">导出备份（.json）</van-button>
@@ -162,6 +163,7 @@ import {
   backupStatusText,
   markBackedUp,
   needBackupReminder,
+  env,
   openInstallGuide
 } from '@/utils/install'
 

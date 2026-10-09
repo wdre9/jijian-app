@@ -13,7 +13,7 @@
       <div class="card hero">
         <div class="hero__logo">计</div>
         <div class="hero__name">计件工资记账</div>
-        <div class="hero__ver">版本 {{ version }} · 移动端 Web App（PWA）</div>
+        <div class="hero__ver">版本 {{ version }} · {{ env.nativeApp ? 'Android 原生应用' : '移动端 Web App（PWA）' }}</div>
         <div class="hero__badges">
           <van-tag round plain type="primary">纯本地存储</van-tag>
           <van-tag round plain type="success">离线可用</van-tag>
@@ -31,7 +31,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div v-if="!env.nativeApp" class="card">
         <div class="card__head">
           <div class="card__title">添加到主屏幕</div>
           <van-tag v-if="env.standalone" round plain type="success">已独立窗口运行</van-tag>
@@ -60,6 +60,10 @@
           <div class="card__title">数据与隐私</div>
         </div>
         <div class="privacy">
+          <p v-if="env.nativeApp">
+            当前为 Android 原生应用（APK）：无需「添加到主屏幕」，从桌面图标直接启动。
+            数据仍保存在本机应用内，卸载应用会清除数据，请定期在「数据与导出」里导出备份。
+          </p>
           <p>
             全部数据（计件记录、产品、工序、工人、设置）都保存在你这台设备的浏览器本地数据库（IndexedDB）中，
             <b>不会上传到任何服务器</b>，也没有账号与登录。

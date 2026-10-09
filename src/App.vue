@@ -22,7 +22,7 @@ import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import AppTabBar from '@/components/AppTabBar.vue'
 import InstallGuideSheet from '@/components/InstallGuideSheet.vue'
-import { initInstall } from '@/utils/install'
+import { initInstall, env } from '@/utils/install'
 
 const store = useAppStore()
 const route = useRoute()
