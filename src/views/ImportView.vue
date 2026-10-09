@@ -47,7 +47,7 @@
           <div class="card">
             <van-uploader v-model="images" multiple :max-count="9" accept="image/*" />
             <div class="fs-12 text-3 mt-8 lh-18">
-              图片仅在本机通过 tesseract.js（中文 chi_sim）识别，不出设备。
+              图片仅在本机识别（App 端 ML Kit 中文模型 / 网页端 tesseract.js），不出设备。
               首次使用需联网下载语言包，之后自动缓存，可离线复用。
             </div>
             <van-button
@@ -210,12 +210,10 @@ import type { UploaderFileListItem } from 'vant'
 import { useAppStore } from '@/stores/app'
 import { money, round, toNum } from '@/utils/format'
 import {
-  ocrImage,
   parseImportText,
-  releaseOcrWorker,
-  setOcrLogger,
   type DraftRow
 } from '@/utils/importer'
+import { isNativeOcr, recognizeImage, releaseOcr, setOcrProgressListener } from '@/utils/ocr'
 
 const store = useAppStore()
 const router = useRouter()
@@ -242,7 +240,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  void releaseOcrWorker()
+  void releaseOcr()
 })
 
 /** 解析一段文本到预览草稿 */
@@ -296,9 +294,9 @@ function runOcr() {
   ocrMergedText.value = ''
   ocrCursor = 0
   ocrRunning.value = true
-  setOcrLogger((m) => {
+  setOcrProgressListener((m) => {
     if (m.status === 'recognizing text' && ocrStates.value[ocrCursor]) {
-      ocrStates.value[ocrCursor].progress = m.progress
+      ocrStates.value[ocrCursor].progress = m.progress ?? 1
     }
   })
   void processNextOcr()
@@ -315,7 +313,7 @@ async function processNextOcr() {
   const file = images.value[ocrCursor].file
   try {
     if (!file) throw new Error('缺少图片文件')
-    const text = await ocrImage(file)
+    const text = await recognizeImage(file)
     ocrMergedText.value += (ocrMergedText.value ? '\n' : '') + text
     st.state = 'done'
   } catch (e) {

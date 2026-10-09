@@ -1,7 +1,7 @@
 {
   "name": "jijian-wage-pwa",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "description": "计件工资记账 · 移动端 PWA（本地离线、无需登录）",
   "license": "MIT",
@@ -30,9 +30,11 @@
     "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@capacitor/android": "^6.2.2",
-    "@capacitor/cli": "^6.2.2",
-    "@capacitor/core": "^6.2.2",
+    "@capacitor-mlkit/text-recognition": "^8.2.1",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.4",
     "echarts": "^5.5.1",
     "html2canvas": "^1.4.1",
     "localforage": "^1.10.0",

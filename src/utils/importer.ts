@@ -1,8 +1,7 @@
 /* ==========================================================================
-   批量导入工具：文本解析 + 本地 OCR（tesseract.js 中文）
+   批量导入工具：文本解析（OCR 识别统一入口见 utils/ocr.ts）
    所有识别与解析都在用户设备本地完成，不上传任何数据。
    ========================================================================== */
-import * as Tesseract from 'tesseract.js'
 import type { Shift } from '@/types'
 import { round } from '@/utils/format'
 import { daysBetween, todayStr, toDateStr } from '@/utils/date'
@@ -188,45 +187,4 @@ export function parseImportText(rawText: string, worker = ''): ParseResult {
   return { rows, skippedCount, unparsed }
 }
 
-/* ----------------------------- 图片 OCR（本地 tesseract.js） ----------------------------- */
 
-let workerPromise: Promise<Tesseract.Worker> | null = null
-let loggerHandler: ((m: Tesseract.LoggerMessage) => void) | null = null
-
-async function getWorker(): Promise<Tesseract.Worker> {
-  if (!workerPromise) {
-    workerPromise = Tesseract.createWorker('chi_sim', 1, {
-      // 首次使用从 CDN 下载 chi_sim 语言包后自动缓存（IndexedDB），后续离线可复用；
-      // 图片数据全程在本机识别，不出设备。
-      cacheMethod: 'refresh',
-      logger: (m) => {
-        if (loggerHandler) loggerHandler(m)
-      }
-    })
-  }
-  return workerPromise
-}
-
-export function setOcrLogger(fn: ((m: Tesseract.LoggerMessage) => void) | null): void {
-  loggerHandler = fn
-}
-
-/** 识别单张图片，返回识别文本 */
-export async function ocrImage(blob: Blob): Promise<string> {
-  const worker = await getWorker()
-  const { data } = await worker.recognize(blob)
-  return data.text || ''
-}
-
-/** 释放 OCR worker（组件卸载时调用） */
-export async function releaseOcrWorker(): Promise<void> {
-  if (workerPromise) {
-    const w = await workerPromise
-    try {
-      await w.terminate()
-    } catch {
-      /* ignore */
-    }
-    workerPromise = null
-  }
-}

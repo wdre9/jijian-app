@@ -22,11 +22,11 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Setup Java 17
+      - name: Setup Java 21
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - name: Configure Android SDK
         run: |
@@ -43,6 +43,26 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Prepare signing keystore from Secrets
+        env:
+          JIJIAN_KEYSTORE_B64: ${{ secrets.JIJIAN_KEYSTORE_B64 }}
+          JIJIAN_STORE_PASSWORD: ${{ secrets.JIJIAN_STORE_PASSWORD }}
+          JIJIAN_KEY_ALIAS: ${{ secrets.JIJIAN_KEY_ALIAS }}
+          JIJIAN_KEY_PASSWORD: ${{ secrets.JIJIAN_KEY_PASSWORD }}
+        run: |
+          if [ -n "$JIJIAN_KEYSTORE_B64" ]; then
+            echo "$JIJIAN_KEYSTORE_B64" | base64 -d > android/keystore.jks
+            cat > android/keystore.properties <<EOF
+storeFile=keystore.jks
+storePassword=$JIJIAN_STORE_PASSWORD
+keyAlias=$JIJIAN_KEY_ALIAS
+keyPassword=$JIJIAN_KEY_PASSWORD
+EOF
+            echo "keystore prepared from secrets"
+          else
+            echo "no JIJIAN_KEYSTORE_B64 secret; building unsigned release APK"
+          fi
+
       - name: Prepare Gradle for CI
         working-directory: android
         run: |
@@ -51,13 +71,31 @@ jobs:
           printf "24333f8a63b6825ea9c5510f9a08f9c04f041b05\n" > $ANDROID_HOME/licenses/android-sdk-license
           cat gradle/wrapper/gradle-wrapper.properties
 
-      - name: Build APK (debug)
+      - name: Build APK (release)
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Mark unsigned APK
+        if: env.JIJIAN_KEYSTORE_B64 == ''
+        env:
+          JIJIAN_KEYSTORE_B64: ${{ secrets.JIJIAN_KEYSTORE_B64 }}
+        working-directory: android
+        run: |
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/app-release-unsigned.apk
+          fi
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
+          JIJIAN_KEYSTORE_B64: ${{ secrets.JIJIAN_KEYSTORE_B64 }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" android/app/build/outputs/apk/debug/app-debug.apk --title "${GITHUB_REF_NAME}" --generate-notes
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            gh release create "${GITHUB_REF_NAME}" android/app/build/outputs/apk/release/app-release.apk --title "${GITHUB_REF_NAME}" --generate-notes
+          elif [ -f android/app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+            gh release create "${GITHUB_REF_NAME}" android/app/build/outputs/apk/release/app-release-unsigned.apk --title "${GITHUB_REF_NAME} (unsigned)" --notes "未配置 JIJIAN_KEYSTORE_B64 等 Secrets，本次发布为未签名 APK，无法直接安装。请在仓库 Settings -> Secrets and variables -> Actions 配置签名 Secrets 后重新发布。"
+          else
+            echo "no apk found to publish"
+            exit 1
+          fi

@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { AppSettings, BackupPackage, PieceRecord, Process, Product, Worker } from '@/types'
+import type { AppSettings, BackupPackage, DataDoc, PieceRecord, Process, Product, Worker } from '@/types'
 import * as db from '@/db'
+import { maybeAutoBackup } from '@/utils/autobackup'
 import { round, uid } from '@/utils/format'
 import { todayStr, weekRange, currentMonthRange } from '@/utils/date'
 
@@ -30,28 +31,37 @@ export const useAppStore = defineStore('app', () => {
   const workers = ref<Worker[]>([])
   const settings = ref<AppSettings>({ ...db.DEFAULT_SETTINGS })
 
+  /** 数据层单文档缓存：所有变更先改内存，再由 persist() 全量落盘 */
+  let docCache: DataDoc | null = null
+
   /* ----------------------------- 初始化 ----------------------------- */
   async function init(force = false): Promise<void> {
     if (ready.value && !force) return
     try {
-      const [r, p, pr, w, s] = await Promise.all([
-        db.dumpStore<PieceRecord>(db.stores.records),
-        db.dumpStore<Product>(db.stores.products),
-        db.dumpStore<Process>(db.stores.processes),
-        db.dumpStore<Worker>(db.stores.workers),
-        db.loadSettings()
-      ])
-      records.value = r
-      products.value = p
-      processes.value = pr
-      workers.value = w
-      settings.value = s
+      const doc = await db.loadDoc()
+      docCache = doc
+      records.value = doc.records
+      products.value = doc.products
+      processes.value = doc.processes
+      workers.value = doc.workers
+      settings.value = doc.settings
       ready.value = true
       loadError.value = ''
     } catch (e) {
       loadError.value = e instanceof Error ? e.message : String(e)
       ready.value = true
     }
+  }
+
+  /** 全量持久化：内存态 -> 单文档 -> 落盘（落盘后触发自动备份钩子） */
+  async function persist(): Promise<void> {
+    if (!docCache) return
+    docCache.records = records.value
+    docCache.products = products.value
+    docCache.processes = processes.value
+    docCache.workers = workers.value
+    docCache.settings = settings.value
+    await db.saveDoc(docCache)
   }
 
   /* ----------------------------- 计算属性 ----------------------------- */
@@ -112,7 +122,7 @@ export const useAppStore = defineStore('app', () => {
       updatedAt: now
     }
     records.value.push(rec)
-    await db.stores.records.setItem(rec.id, rec)
+    await persist()
     if (settings.value.rememberLast) {
       await updateSettings({ lastProductId: rec.productId, lastProcessId: rec.processId })
     }
@@ -140,7 +150,7 @@ export const useAppStore = defineStore('app', () => {
     }
     const idx = records.value.findIndex((r) => r.id === id)
     records.value.splice(idx, 1, next)
-    await db.stores.records.setItem(id, next)
+    await persist()
     if (next.worker && !workers.value.some((w) => w.name === next.worker)) {
       await addWorker(next.worker)
     }
@@ -148,13 +158,13 @@ export const useAppStore = defineStore('app', () => {
 
   async function removeRecord(id: string): Promise<void> {
     records.value = records.value.filter((r) => r.id !== id)
-    await db.stores.records.removeItem(id)
+    await persist()
   }
 
   async function removeRecords(ids: string[]): Promise<void> {
     const set = new Set(ids)
     records.value = records.value.filter((r) => !set.has(r.id))
-    await Promise.all(ids.map((id) => db.stores.records.removeItem(id)))
+    await persist()
   }
 
   /* ----------------------------- 产品操作 ----------------------------- */
@@ -169,7 +179,7 @@ export const useAppStore = defineStore('app', () => {
       updatedAt: now
     }
     products.value.push(item)
-    await db.stores.products.setItem(item.id, item)
+    await persist()
     return item
   }
 
@@ -181,20 +191,16 @@ export const useAppStore = defineStore('app', () => {
     if (!item) return
     const next: Product = { ...item, ...patch, updatedAt: Date.now() }
     products.value.splice(products.value.findIndex((p) => p.id === id), 1, next)
-    await db.stores.products.setItem(id, next)
+    await persist()
   }
 
   /** 删除产品；若存在关联记录且未强制，则返回记录数由调用方二次确认 */
   async function removeProduct(id: string, force = false): Promise<{ recordCount: number }> {
     const recordCount = records.value.filter((r) => r.productId === id).length
     if (recordCount > 0 && !force) return { recordCount }
-    const procs = processes.value.filter((p) => p.productId === id)
     products.value = products.value.filter((p) => p.id !== id)
     processes.value = processes.value.filter((p) => p.productId !== id)
-    await Promise.all([
-      db.stores.products.removeItem(id),
-      ...procs.map((p) => db.stores.processes.removeItem(p.id))
-    ])
+    await persist()
     return { recordCount }
   }
 
@@ -232,7 +238,7 @@ export const useAppStore = defineStore('app', () => {
       updatedAt: now
     }
     processes.value.push(item)
-    await db.stores.processes.setItem(item.id, item)
+    await persist()
     return item
   }
 
@@ -245,14 +251,14 @@ export const useAppStore = defineStore('app', () => {
     const next: Process = { ...item, ...patch, updatedAt: Date.now() }
     if (patch.price !== undefined) next.price = round(patch.price, 4)
     processes.value.splice(processes.value.findIndex((p) => p.id === id), 1, next)
-    await db.stores.processes.setItem(id, next)
+    await persist()
   }
 
   async function removeProcess(id: string, force = false): Promise<{ recordCount: number }> {
     const recordCount = records.value.filter((r) => r.processId === id).length
     if (recordCount > 0 && !force) return { recordCount }
     processes.value = processes.value.filter((p) => p.id !== id)
-    await db.stores.processes.removeItem(id)
+    await persist()
     return { recordCount }
   }
 
@@ -278,31 +284,41 @@ export const useAppStore = defineStore('app', () => {
     if (!n || workers.value.some((w) => w.name === n)) return
     const item: Worker = { name: n, createdAt: Date.now() }
     workers.value.push(item)
-    await db.stores.workers.setItem(n, item)
+    await persist()
   }
 
   async function removeWorker(name: string): Promise<void> {
     workers.value = workers.value.filter((w) => w.name !== name)
-    await db.stores.workers.removeItem(name)
+    await persist()
   }
 
   /* ----------------------------- 设置与数据 ----------------------------- */
   async function updateSettings(patch: Partial<AppSettings>): Promise<void> {
     settings.value = { ...settings.value, ...patch }
-    await db.saveSettings(settings.value)
+    await persist()
   }
 
   async function exportBackup(): Promise<BackupPackage> {
-    return db.buildBackup(settings.value)
+    if (!docCache) {
+      await init()
+    }
+    return db.buildBackup(docCache!)
   }
 
   async function importBackup(pkg: BackupPackage): Promise<void> {
-    await db.restoreBackup(pkg)
-    await init(true)
+    const doc = await db.restoreBackup(pkg)
+    docCache = doc
+    records.value = doc.records
+    products.value = doc.products
+    processes.value = doc.processes
+    workers.value = doc.workers
+    settings.value = doc.settings
+    ready.value = true
   }
 
   async function resetAll(): Promise<void> {
     await db.clearAllData()
+    docCache = db.emptyDoc()
     records.value = []
     products.value = []
     processes.value = []
@@ -450,6 +466,9 @@ export const useAppStore = defineStore('app', () => {
     loadDemoData
   }
 })
+
+/** 注册自动备份钩子：数据落盘后由 db 层触发（间隔 24h 自动导出） */
+db.setAutoBackupHook((doc) => maybeAutoBackup(doc))
 
 /** 内部：按月份键取范围（避免循环引用，单独实现） */
 function currentMonthRangeOf(ym: string): { start: string; end: string } {

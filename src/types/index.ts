@@ -121,3 +121,23 @@ export interface DateRange {
   start: string
   end: string
 }
+
+/* ==========================================================================
+   单文档数据模型（数据层主存储）
+   ========================================================================== */
+
+/** 单文档 v1 结构：全量状态序列化为一个 JSON 键 */
+export interface DataDocV1 {
+  /** 结构版本，由迁移链管理 */
+  schemaVersion: 1
+  /** 最近一次保存时间（ms） */
+  savedAt: number
+  records: PieceRecord[]
+  products: Product[]
+  processes: Process[]
+  workers: Worker[]
+  settings: AppSettings
+}
+
+/** 当前文档类型；未来版本通过联合类型扩展（DataDoc = DataDocV1 | DataDocV2 ...） */
+export type DataDoc = DataDocV1
