@@ -41,6 +41,14 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Prepare Gradle for CI
+        working-directory: android
+        run: |
+          sed -i 's|mirrors\.cloud\.tencent\.com/gradle|services.gradle.org/distributions|' gradle/wrapper/gradle-wrapper.properties
+          mkdir -p $ANDROID_HOME/licenses
+          printf "24333f8a63b6825ea9c5510f9a08f9c04f041b05\n" > $ANDROID_HOME/licenses/android-sdk-license
+          cat gradle/wrapper/gradle-wrapper.properties
+
       - name: Build APK (debug)
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
