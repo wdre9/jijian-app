@@ -133,7 +133,7 @@ export function parseImportText(rawText: string, worker = ''): ParseResult {
     if (codeMatch) {
       const code = codeMatch[1]
       const codeStart = (codeMatch.index ?? 0) + codeMatch[0].lastIndexOf(code)
-      const qtyStart = qp ? qp.index + qp[0].indexOf(qp[1]) : -1
+      const qtyStart = qp ? (qp.index ?? 0) + qp[0].indexOf(qp[1]) : -1
       const isQtyItself = qp && qtyStart >= 0 && codeStart === qtyStart && code === qp[1]
       if (!isQtyItself) currentCode = code
     }
@@ -165,7 +165,7 @@ export function parseImportText(rawText: string, worker = ''): ParseResult {
     const productCode = currentCode
 
     // 工序后缀：优先从行首货号之后取；若本行没有货号（数量行继承货号），从行首取
-    const qtyStart = qp.index + qp[0].indexOf(qp[1])
+    const qtyStart = (qp.index ?? 0) + qp[0].indexOf(qp[1])
     const codeStart = codeMatch ? (codeMatch.index ?? 0) + codeMatch[0].lastIndexOf(codeMatch[1]) : -1
     const hasHeadCode = codeMatch && codeStart !== qtyStart
     const suffix = hasHeadCode ? rest.slice(codeMatch![0].length) : rest
