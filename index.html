@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>计件工资记账</title>
+    <meta name="description" content="本地离线的移动端计件工资记账工具：记账、统计、导出，一步到位" />
+    <meta name="theme-color" content="#3B82F6" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="计件记账" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #f4f6fa;
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: #f4f6fa;
+        z-index: 9999;
+        transition: opacity 0.25s ease;
+        font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Segoe UI,
+          Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      }
+      #splash .logo {
+        width: 72px;
+        height: 72px;
+        border-radius: 20px;
+        background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+        color: #fff;
+        font-size: 36px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 24px rgba(59, 130, 246, 0.32);
+      }
+      #splash .txt {
+        font-size: 13px;
+        color: #6b7280;
+        letter-spacing: 1px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="splash">
+      <div class="logo">计</div>
+      <div class="txt">正在加载本地数据…</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

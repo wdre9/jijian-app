@@ -1,0 +1,350 @@
+/* ==========================================================================
+   全局布局与通用样式
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+/* ---------- 页面骨架 ---------- */
+.page {
+  min-height: 100vh;
+  padding-bottom: calc(70px + var(--app-safe-bottom));
+  background: var(--app-bg);
+}
+
+.page--plain {
+  padding-bottom: calc(20px + var(--app-safe-bottom));
+}
+
+.page__inner {
+  padding: 12px 14px 0;
+}
+
+.page__title {
+  padding: calc(var(--app-safe-top) + 14px) 14px 6px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+
+.page__subtitle {
+  padding: 0 14px 12px;
+  font-size: 12px;
+  color: var(--app-text-3);
+}
+
+/* ---------- 卡片 ---------- */
+.card {
+  background: var(--app-card);
+  border-radius: var(--app-radius);
+  box-shadow: var(--app-shadow);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.card--flat {
+  box-shadow: none;
+  border: 1px solid var(--app-line);
+}
+
+.card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card__title::before {
+  content: '';
+  width: 3px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--app-primary);
+}
+
+/* ---------- 通用工具类 ---------- */
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.row--between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.row--wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.mt-8 {
+  margin-top: 8px;
+}
+.mt-12 {
+  margin-top: 12px;
+}
+.mt-16 {
+  margin-top: 16px;
+}
+
+.text-2 {
+  color: var(--app-text-2);
+}
+.text-3 {
+  color: var(--app-text-3);
+}
+.fs-12 {
+  font-size: 12px;
+}
+.fs-13 {
+  font-size: 13px;
+}
+.fs-14 {
+  font-size: 14px;
+}
+.fs-16 {
+  font-size: 16px;
+}
+.bold {
+  font-weight: 600;
+}
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-up {
+  color: var(--app-danger);
+}
+.text-down {
+  color: var(--app-success);
+}
+
+/* 数字等宽，避免跳动 */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* ---------- 金额 ---------- */
+.money {
+  font-weight: 700;
+  color: var(--app-text);
+  letter-spacing: -0.2px;
+}
+
+.money--lg {
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.money--xl {
+  font-size: 34px;
+  line-height: 1.1;
+}
+
+.money__unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--app-text-2);
+  margin-left: 3px;
+}
+
+.delta {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.delta--up {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.delta--down {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.delta--flat {
+  color: var(--app-text-2);
+  background: var(--app-card-2);
+}
+
+/* ---------- 空状态 ---------- */
+.empty {
+  padding: 46px 20px;
+  text-align: center;
+  color: var(--app-text-3);
+  font-size: 13px;
+}
+
+.empty__icon {
+  font-size: 40px;
+  margin-bottom: 10px;
+  opacity: 0.5;
+}
+
+/* ---------- 粘性分组头 ---------- */
+.group-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--app-text-2);
+  background: var(--app-bg);
+}
+
+.group-head__amount {
+  font-weight: 700;
+  color: var(--app-primary);
+}
+
+/* ---------- 图表容器 ---------- */
+.chart {
+  width: 100%;
+  height: 220px;
+}
+
+.chart--sm {
+  height: 190px;
+}
+
+/* ---------- Vant 细节微调 ---------- */
+.van-cell {
+  background: transparent;
+}
+
+.van-cell-group--inset {
+  margin: 0 0 12px;
+}
+
+.van-nav-bar {
+  background: var(--app-card);
+}
+
+.van-tabbar {
+  background: var(--app-card);
+}
+
+.van-popup {
+  background: var(--app-card);
+}
+
+.van-tabbar-item__text {
+  font-size: 11px;
+}
+
+/* 列表行内金额加重 */
+.record-row__amount {
+  font-weight: 700;
+  color: var(--app-text);
+}
+
+/* 快捷工序卡片 */
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.quick-card {
+  background: var(--app-card-2);
+  border: 1px solid var(--app-line);
+  border-radius: var(--app-radius-sm);
+  padding: 10px 8px;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.quick-card:active {
+  transform: scale(0.97);
+  border-color: var(--app-primary);
+}
+
+.quick-card__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text);
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-card__price {
+  font-size: 11px;
+  color: var(--app-primary);
+  font-weight: 600;
+}
+
+/* 进度条下方的说明 */
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--app-text-2);
+  margin-top: 6px;
+}
+
+/* 长图导出容器 */
+.capture-area {
+  background: var(--app-card);
+  border-radius: var(--app-radius);
+  padding: 16px;
+}
+
+.capture-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed var(--app-line);
+  margin-bottom: 10px;
+}
+
+.capture-brand__logo {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(180deg, #3b82f6, #1d4ed8);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

@@ -1,0 +1,91 @@
+/* ==========================================================================
+   计件工资记账 · 设计变量（浅色 / 深色）
+   主色：清爽蓝 #3B82F6
+   ========================================================================== */
+
+:root {
+  --app-primary: #3b82f6;
+  --app-primary-deep: #1d4ed8;
+  --app-primary-weak: rgba(59, 130, 246, 0.1);
+
+  --app-bg: #f4f6fa;
+  --app-card: #ffffff;
+  --app-card-2: #f8fafc;
+
+  --app-text: #1f2937;
+  --app-text-2: #6b7280;
+  --app-text-3: #9ca3af;
+
+  --app-line: #eef1f6;
+  --app-success: #10b981;
+  --app-danger: #ef4444;
+  --app-warning: #f59e0b;
+
+  --app-shadow: 0 2px 12px rgba(17, 24, 39, 0.06);
+  --app-radius: 14px;
+  --app-radius-sm: 10px;
+
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* ---- Vant 主题覆盖 ---- */
+  --van-primary-color: #3b82f6;
+  --van-radius-md: 10px;
+  --van-radius-lg: 14px;
+  --van-button-primary-background: #3b82f6;
+  --van-button-primary-border-color: #3b82f6;
+  --van-tabbar-item-active-color: #3b82f6;
+  --van-tabs-bottom-bar-color: #3b82f6;
+  --van-nav-bar-icon-color: #3b82f6;
+  --van-nav-bar-text-color: #3b82f6;
+}
+
+html.van-theme-dark {
+  --app-primary: #60a5fa;
+  --app-primary-deep: #3b82f6;
+  --app-primary-weak: rgba(96, 165, 250, 0.16);
+
+  --app-bg: #0f141b;
+  --app-card: #1a2029;
+  --app-card-2: #212933;
+
+  --app-text: #f2f4f7;
+  --app-text-2: #9ca3af;
+  --app-text-3: #6b7280;
+
+  --app-line: #2a323d;
+  --app-success: #34d399;
+  --app-danger: #f87171;
+  --app-warning: #fbbf24;
+
+  --app-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+
+  --van-primary-color: #60a5fa;
+  --van-button-primary-background: #3b82f6;
+  --van-button-primary-border-color: #3b82f6;
+  --van-tabbar-item-active-color: #60a5fa;
+  --van-tabs-bottom-bar-color: #60a5fa;
+  --van-nav-bar-icon-color: #60a5fa;
+  --van-nav-bar-text-color: #60a5fa;
+}
+
+html,
+body {
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Segoe UI, Arial,
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  overscroll-behavior-y: none;
+}
+
+/* 金额数字：等宽字体 + 加粗，便于对齐扫读 */
+.num,
+.money {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
