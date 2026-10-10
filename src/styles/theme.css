@@ -74,7 +74,7 @@ body {
   background: var(--app-bg);
   color: var(--app-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Segoe UI, Arial,
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    'Noto Sans CJK SC', 'Source Han Sans SC', 'Noto Sans SC', sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
 }

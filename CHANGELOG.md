@@ -5,6 +5,15 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.2] - 2026-10-10
+
+### 变更
+
+- 应用图标字体由微软雅黑/PingFang SC 替换为思源黑体（Noto Sans CJK SC，SIL OFL 1.1 授权），
+  彻底消除商用侵权与诉讼风险；图标外观保持蓝底白字「计」不变，重新渲染全部 mipmap 图标、启动页与 web 图标资源。
+- 全局 UI 字体栈同步替换为思源黑体系列，移除微软雅黑/PingFang SC 引用。
+- 版本号升级至 1.2.2（versionCode 3）。
+
 ## [1.2.1] - 2026-10-10
 
 ### 修复
