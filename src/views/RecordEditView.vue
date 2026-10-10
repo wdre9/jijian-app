@@ -86,7 +86,7 @@
       </van-cell-group>
 
       <div class="submit">
-        <van-button type="primary" block round size="large" :loading="saving" @click="save">
+        <van-button type="primary" block round size="large" :loading="saving" :disabled="saving" @click="save">
           {{ isEdit ? '保存修改' : '保存记录' }}
         </van-button>
         <van-button
@@ -277,6 +277,7 @@ function onPickProcess({ selectedOptions }: { selectedOptions: Array<{ value: st
 }
 
 async function save() {
+  if (saving.value) return
   if (!form.productId) return showToast('请选择产品')
   if (!form.processId) return showToast('请选择工序')
   const quantity = round(toNum(qtyStr.value), 2)

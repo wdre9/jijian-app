@@ -145,7 +145,12 @@
     />
 
     <!-- 悬浮新增 -->
-    <button class="fab" type="button" @click="router.push('/record/new')">
+    <button
+      class="fab"
+      type="button"
+      :disabled="fabBusy"
+      @click="goAddRecord"
+    >
       <van-icon name="plus" size="20" />
     </button>
   </div>
@@ -163,6 +168,17 @@ import RangeTabs from '@/components/RangeTabs.vue'
 import StatTile from '@/components/StatTile.vue'
 import RecordItem from '@/components/RecordItem.vue'
 import EmptyState from '@/components/EmptyState.vue'
+
+// 记一笔入口防抖：防止快速连点重复 push 新增表单页
+const fabBusy = ref(false)
+function goAddRecord() {
+  if (fabBusy.value) return
+  fabBusy.value = true
+  router.push('/record/new')
+  setTimeout(() => {
+    fabBusy.value = false
+  }, 500)
+}
 import QuickAddSheet from '@/components/QuickAddSheet.vue'
 import InstallTipCard from '@/components/InstallTipCard.vue'
 

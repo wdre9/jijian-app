@@ -10,6 +10,17 @@
     />
 
     <div class="page__inner pb-88">
+      <!-- 导入成功结果卡：明确反馈，避免空白页误导重复提交 -->
+      <div v-if="lastImport" class="card card--success">
+        <div class="card__head">
+          <div class="card__title">导入成功</div>
+          <van-tag round plain type="success">已完成</van-tag>
+        </div>
+        <div class="fs-13">
+          已导入 <b>{{ lastImport.count }}</b> 条记录（{{ lastImport.time }}），可在「明细」页查看。
+        </div>
+      </div>
+
       <!-- 解析规则说明 -->
       <div class="card">
         <div class="card__head">
@@ -193,7 +204,7 @@
         type="primary"
         round
         :loading="importing"
-        :disabled="!validRows.length"
+        :disabled="!validRows.length || importing"
         @click="confirmImport"
       >
         确认导入
@@ -232,6 +243,7 @@ const skippedCount = ref(0)
 const unparsed = ref<string[]>([])
 const parsed = ref(false)
 const importing = ref(false)
+const lastImport = ref<{ count: number; time: string } | null>(null)
 
 const defaultWorker = computed(() => store.settings.defaultWorker || '')
 
@@ -335,8 +347,11 @@ function finishOcr() {
 /* ----------------------------- 导入 ----------------------------- */
 
 async function confirmImport() {
+  if (importing.value) return
   const rows = validRows.value
   if (!rows.length) return
+
+  importing.value = true
   try {
     await showConfirmDialog({
       title: '确认导入',
@@ -347,10 +362,10 @@ async function confirmImport() {
       cancelButtonText: '取消'
     })
   } catch {
+    importing.value = false
     return
   }
 
-  importing.value = true
   try {
     if (!store.ready) await store.init()
     for (const row of rows) {
@@ -376,6 +391,11 @@ async function confirmImport() {
         amount: row.amount
       })
     }
+    const now = new Date()
+    lastImport.value = {
+      count: rows.length,
+      time: `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`
+    }
     showSuccessToast(`导入成功：${rows.length} 条记录`)
     resetState()
   } catch (e) {
@@ -399,6 +419,11 @@ function resetState() {
 </script>
 
 <style scoped>
+.card--success {
+  border-color: var(--van-success-color, #07c160);
+  background: rgba(7, 193, 96, 0.06);
+}
+
 .lh-18 {
   line-height: 18px;
 }

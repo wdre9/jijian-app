@@ -309,8 +309,14 @@ function askRemoveProcess(id: string) {
     .catch(() => {})
 }
 
+let addRecordLocked = false
 function goAddRecord() {
+  if (addRecordLocked) return
+  addRecordLocked = true
   router.push({ path: '/record/new', query: { productId: pid.value } })
+  setTimeout(() => {
+    addRecordLocked = false
+  }, 500)
 }
 </script>
 
