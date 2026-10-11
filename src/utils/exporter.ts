@@ -155,8 +155,9 @@ export async function saveBlob(blob: Blob, filename: string): Promise<ExportResu
           path: `Documents/${NATIVE_EXPORT_DIR}/${name}`,
           display: saved.display || `文件管理 → 文档 → ${NATIVE_EXPORT_DIR}/${name}`
         }
-      } catch {
-        // MediaStore 不可用（Android 9 及以下）或桥接异常：继续走原有降级链
+      } catch (e) {
+        // MediaStore 不可用（Android 9 及以下）或桥接异常：继续走原有降级链，但需留痕便于排查
+        console.warn('[exporter] MediaStore 写入失败，走降级链', e)
       }
     }
     // 权限检查带超时兜底；失败/悬挂一律视为未授权，继续走目录降级

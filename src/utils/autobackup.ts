@@ -69,9 +69,10 @@ async function writeNative(pkg: unknown): Promise<void> {
     const res = await Filesystem.readdir({ path: DIR_NAME, directory: Directory.Documents })
     const files = res.files
       .filter((f) => f.name && f.name.startsWith(FILE_PREFIX) && f.name.endsWith('.json'))
-      .sort((a, b) => (a.name! < b.name! ? -1 : 1))
+      .map((f) => f.name as string)
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
     for (const f of files.slice(0, Math.max(0, files.length - MAX_FILES))) {
-      await Filesystem.deleteFile({ path: `${DIR_NAME}/${f.name}`, directory: Directory.Documents })
+      await Filesystem.deleteFile({ path: `${DIR_NAME}/${f}`, directory: Directory.Documents })
     }
   } catch {
     /* 清理失败不影响主流程 */
