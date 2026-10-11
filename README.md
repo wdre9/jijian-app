@@ -3,7 +3,7 @@
 Looking for the English version? Click [here](README.en.md).
 
 一个面向车间/工厂计件场景的**本地记账 Android 应用**：拿到 APK 安装即可用，
-**无需联网、无需登录、数据全部保存在手机本地**（应用内 IndexedDB），断网也能继续记账。
+**无需联网、无需登录、数据全部保存在手机本地**（应用内本地存储），断网也能继续记账。
 
 > 功能范围：快速记账、明细筛选、多维度统计图表、一键导出 Excel/CSV、图片识别导入（原生本地 OCR）、
 > 自动备份与一键还原、深浅色主题。
@@ -13,7 +13,7 @@ Looking for the English version? Click [here](README.en.md).
 > 记账工具的功能对照说明，不含任何对比评价或优劣指向。
 
 > **使用前请先看**：本应用数据只保存在本机应用沙盒中，**卸载应用或清除应用数据会导致数据丢失**。
-> APP 已开启自动备份：每次记账后数据会自动写入手机本地 `计件备份/` 目录，卸载前请先复制出该目录，
+> APP 已开启自动备份：每次记账后数据会自动写入手机本地 `计件自动备份/` 目录，卸载前请先复制出该目录，
 > 或定期在「我的 → 数据与导出 → 导出备份」中手动保存 `.json` 备份文件。备份格式与网页版（PWA）互通。
 
 ## 安装方式
@@ -54,17 +54,17 @@ Looking for the English version? Click [here](README.en.md).
 
 | 类别 | 选型 |
 | --- | --- |
-| 应用壳 | Capacitor 6（Android WebView，`appId=com.wdre9.jijian`） |
+| 应用壳 | Capacitor 8.5.3（Android WebView，`appId=com.wdre9.jijian`） |
 | 构建 | Vite 5 |
 | 框架 | Vue 3（`<script setup>` + TypeScript） |
-| 路由 | Vue Router 4（Hash 模式，静态托管免配置） |
+| 路由 | Vue Router 4（原生端 History 模式 / Web 端 Hash 模式） |
 | UI | Vant 4（移动端组件库） |
 | 状态 | Pinia |
-| 本地存储 | localForage（IndexedDB，带降级） |
+| 本地存储 | localForage（localStorage 主存储，旧 IndexedDB 数据自动迁移） |
 | 图表 | ECharts 5 + vue-echarts（按需注册） |
 | 导出 | xlsx（Excel）、原生 Blob（CSV/JSON）、html2canvas（统计长图） |
-| OCR 导入 | tesseract.js（本地识别，图片文字不出设备） |
-| 打包 | Android Gradle Plugin 8.2.1 / Gradle 8.2.1，minSdk 22 / compileSdk 34 |
+| OCR 导入 | 原生 ML Kit 本地识别（Web 端 tesseract.js，图片文字不出设备） |
+| 打包 | Android Gradle Plugin 8.13.0 / Gradle 8.14.3，minSdk 24 / compileSdk 36 |
 
 ---
 
@@ -127,7 +127,7 @@ jijian-app/
 
 **批量导入**
 - 粘贴文本解析：识别「日期 / 货号 / 工序 / ×数量×单价=金额」格式，逐行校对后一键入库
-- 图片 OCR：拍照或选择截图，本地识别文字后转成记录，可逐行修改
+- 图片 OCR：选择本地图片识别文字后转成记录，可逐行修改
 
 **我的**
 - 产品与工序管理（增删改、单价设置、规格）
@@ -144,8 +144,8 @@ jijian-app/
 | 依赖 | 说明 |
 | --- | --- |
 | Node.js 18+ | 前端构建（本项目在 Node 24 / npm 11 下验证通过） |
-| JDK 17 | Android Gradle Plugin 8.x 要求 |
-| Android SDK | `platforms;android-34`、`build-tools;34.0.0`，配置 `ANDROID_HOME` |
+| JDK 21 | Android Gradle Plugin 8.13 / Gradle 8.14.3 要求（Gradle 8.14 需 JDK 21） |
+| Android SDK | `platforms;android-36`、`build-tools;36.0.0`，配置 `ANDROID_HOME` |
 
 ### 本地构建 APK
 
@@ -190,13 +190,13 @@ git push origin v1.1.0
 
 ## 六、数据说明
 
-- 所有数据仅保存在本机应用沙盒内的 IndexedDB 中，**不上传任何服务器**；
+- 所有数据仅保存在本机应用沙盒内的本地存储中，**不上传任何服务器**；
 - 卸载应用、清除应用数据会造成数据丢失，请定期
   「我的 → 数据与导出 → 导出备份」保存 `.json` 备份文件；
 - 备份文件包含全部记录、产品、工序、工人与设置，导入即可完整恢复；
 - 备份格式与网页版（[jijian-pwa](https://github.com/wdre9/jijian-pwa)）**完全互通**：
   在 App 中导出的备份可在 PWA 中导入，反之亦然；
-- 两版数据各自独立存储：App 数据在应用沙盒，PWA 数据在浏览器 IndexedDB，
+- 两版数据各自独立存储：App 数据在应用沙盒，PWA 数据在浏览器本地存储，
   互不干扰，需通过备份文件互通。
 
 ---

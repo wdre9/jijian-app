@@ -11,7 +11,11 @@
 import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { Script, TextRecognition } from '@capacitor-mlkit/text-recognition'
-import * as Tesseract from 'tesseract.js'
+
+/**
+ * tesseract.js 仅 Web/PWA 端需要：使用动态 import() 按需加载，
+ * 原生端（ML Kit）不会把 tesseract.js 及其语言包打进安装包。
+ */
 
 /** 识别进度回调（Web 端 tesseract 进度；原生端为整体阶段提示） */
 export interface OcrProgress {
@@ -26,19 +30,19 @@ export function isNativeOcr(): boolean {
 
 /* ----------------------------- Web：tesseract.js ----------------------------- */
 
-let workerPromise: Promise<Tesseract.Worker> | null = null
+let workerPromise: Promise<import('tesseract.js').Worker> | null = null
 let progressHandler: ((m: OcrProgress) => void) | null = null
 
 function setProgress(p: OcrProgress): void {
   progressHandler?.(p)
 }
 
-async function getTesseractWorker(): Promise<Tesseract.Worker> {
+async function getTesseractWorker(): Promise<import('tesseract.js').Worker> {
   if (!workerPromise) {
+    const Tesseract = await import('tesseract.js')
     workerPromise = Tesseract.createWorker('chi_sim', 1, {
       // 首次使用从 CDN 下载 chi_sim 语言包后自动缓存（IndexedDB），后续离线可复用；
       // 图片数据全程在本机识别，不出设备。
-      cacheMethod: 'refresh',
       logger: (m) => {
         if (m.status === 'recognizing text') {
           setProgress({ status: m.status, progress: m.progress })

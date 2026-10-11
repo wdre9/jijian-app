@@ -4,7 +4,7 @@
 
 A **local bookkeeping Android app** for piece-rate work in workshops and factories:
 install the APK and it is ready to use. **No network, no login, and all data stays on the
-device** (in-app IndexedDB), so it keeps working offline.
+device** (in-app local storage), so it keeps working offline.
 
 > Scope: quick entry, filterable records, multi-dimensional charts and statistics, one-click
 > Excel/CSV export, local backup and restore, light and dark themes.
@@ -58,17 +58,17 @@ Screenshots below are from the actual running app.
 
 | Category | Choice |
 | --- | --- |
-| App shell | Capacitor 6 (Android WebView, `appId=com.wdre9.jijian`) |
+| App shell | Capacitor 8.5.3 (Android WebView, `appId=com.wdre9.jijian`) |
 | Build | Vite 5 |
 | Framework | Vue 3 (`<script setup>` + TypeScript) |
-| Router | Vue Router 4 (Hash mode, no server config needed) |
+| Router | Vue Router 4 (History mode on native / Hash mode on Web) |
 | UI | Vant 4 (mobile component library) |
 | State | Pinia |
-| Local storage | localForage (IndexedDB, with fallback) |
+| Local storage | localForage (localStorage primary, legacy IndexedDB auto-migrated) |
 | Charts | ECharts 5 + vue-echarts (on-demand registration) |
 | Export | xlsx (Excel), native Blob (CSV/JSON), html2canvas (statistic long image) |
-| OCR import | tesseract.js (on-device recognition, image text never leaves the device) |
-| Packaging | Android Gradle Plugin 8.2.1 / Gradle 8.2.1, minSdk 22 / compileSdk 34 |
+| OCR import | Native ML Kit on-device recognition (Web: tesseract.js, image text never leaves the device) |
+| Packaging | Android Gradle Plugin 8.13.0 / Gradle 8.14.3, minSdk 24 / compileSdk 36 |
 
 ---
 
@@ -148,8 +148,8 @@ jijian-app/
 | Dependency | Note |
 | --- | --- |
 | Node.js 18+ | Frontend build (verified on Node 24 / npm 11) |
-| JDK 17 | Required by Android Gradle Plugin 8.x |
-| Android SDK | `platforms;android-34`, `build-tools;34.0.0`, set `ANDROID_HOME` |
+| JDK 21 | Required by Android Gradle Plugin 8.13 / Gradle 8.14.3 (Gradle 8.14 needs JDK 21) |
+| Android SDK | `platforms;android-36`, `build-tools;36.0.0`, set `ANDROID_HOME` |
 
 ### Build APK locally
 
@@ -194,7 +194,7 @@ Once the build finishes, download the APK from the
 
 ## 6. Data Notes
 
-- All data is stored only in the IndexedDB inside the app sandbox on this device; **nothing is
+- All data is stored only in the local storage inside the app sandbox on this device; **nothing is
   uploaded to any server**;
 - Uninstalling the app or clearing app data loses everything. Please export `.json` backups
   regularly via "Mine → Data & Export → Export Backup";
@@ -204,7 +204,7 @@ Once the build finishes, download the APK from the
   ([jijian-pwa](https://github.com/wdre9/jijian-pwa)): a backup exported from the app can be
   imported into the PWA, and vice versa;
 - The two versions keep data separately: app data lives in the app sandbox, PWA data lives in
-  the browser's IndexedDB. They do not interfere; move data between them via backup files.
+  the browser's local storage. They do not interfere; move data between them via backup files.
 
 ---
 
