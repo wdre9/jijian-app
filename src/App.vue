@@ -23,7 +23,7 @@ import { closeDialog, closeToast } from 'vant'
 import { useAppStore } from '@/stores/app'
 import AppTabBar from '@/components/AppTabBar.vue'
 import InstallGuideSheet from '@/components/InstallGuideSheet.vue'
-import { initInstall, env } from '@/utils/install'
+import { initInstall, disposeInstall, env } from '@/utils/install'
 
 const store = useAppStore()
 const route = useRoute()
@@ -76,6 +76,7 @@ onMounted(() => {
 onUnmounted(() => {
   media.removeEventListener('change', onMediaChange)
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  disposeInstall()
 })
 </script>
 

@@ -67,7 +67,7 @@
           </p>
           <template v-else>
             <p>
-              全部数据（计件记录、产品、工序、工人、设置）都保存在你这台设备的浏览器本地数据库（IndexedDB）中，
+              全部数据（计件记录、产品、工序、工人、设置）都保存在你这台设备的浏览器本地存储中，
               <b>不会上传到任何服务器</b>，也没有账号与登录。
             </p>
             <p>
@@ -110,8 +110,10 @@ import {
   promptInstall
 } from '@/utils/install'
 
+import pkg from '../../package.json'
+
 const router = useRouter()
-const version = '1.2.9'
+const version = pkg.version
 
 async function onInstall() {
   const accepted = await promptInstall()

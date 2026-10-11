@@ -44,7 +44,10 @@
         </div>
         <div class="fs-12 text-3 mt-8">
           <template v-if="env.nativeApp">数据存储于本机应用内，关闭应用不会丢失；卸载应用前请先导出备份。</template>
-          <template v-else>数据存储于本机浏览器（IndexedDB），关闭网页不丢失。</template>
+          <template v-else>数据存储于本机浏览器本地存储，关闭网页不丢失。</template>
+        </div>
+        <div v-if="storageUsageText" class="fs-12 mt-8" :style="{ color: storageUsageWarn ? '#e64340' : undefined }">
+          {{ storageUsageText }}
         </div>
       </div>
 
@@ -339,6 +342,38 @@ const rangeText = computed(() => dateSpan.value)
 const amountAll = computed(() => sumAmount(store.records))
 const qtyAll = computed(() => sumQty(store.records))
 
+/** 本地存储用量估算（浏览器 localStorage 上限约 5MB，接近时引导导出归档） */
+const storageUsageText = computed(() => {
+  try {
+    const docBytes = new Blob([JSON.stringify(store.doc)]).size
+    let lsBytes = 0
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i)
+      if (!k) continue
+      const v = window.localStorage.getItem(k)
+      lsBytes += (k.length + (v ? v.length : 0)) * 2
+    }
+    const total = docBytes + lsBytes
+    const kb = (total / 1024).toFixed(1)
+    const limit = 5 * 1024 * 1024
+    const pct = Math.round((total / limit) * 100)
+    if (pct >= 50) {
+      return `本地数据约 ${kb} KB，已达存储上限约 5MB 的 ${pct}%，建议在下方导出备份并定期归档旧记录`
+    }
+    return `本地数据约 ${kb} KB（浏览器存储上限约 5MB），建议定期导出备份归档`
+  } catch {
+    return ''
+  }
+})
+const storageUsageWarn = computed(() => {
+  try {
+    const docBytes = new Blob([JSON.stringify(store.doc)]).size
+    return docBytes >= 5 * 1024 * 1024 * 0.5
+  } catch {
+    return false
+  }
+})
+
 const scopeRecords = computed(() => {
   if (exportRange.value === 'month') {
     const { start, end } = currentMonthRange()
@@ -499,6 +534,24 @@ async function exportBackup() {
   }
 }
 
+/** 运行时校验备份包结构（JSON 解析 + as 断言不可信，必须逐字段确认类型） */
+function isValidBackupPackage(value: unknown): value is BackupPackage {
+  if (!value || typeof value !== 'object') return false
+  const pkg = value as Record<string, unknown>
+  if (pkg.app !== 'jijian-pwa') return false
+  if (typeof pkg.version !== 'number' || typeof pkg.exportedAt !== 'number') return false
+  const data = pkg.data as Record<string, unknown> | null | undefined
+  if (!data || typeof data !== 'object') return false
+  return (
+    Array.isArray(data.records) &&
+    Array.isArray(data.products) &&
+    Array.isArray(data.processes) &&
+    Array.isArray(data.workers) &&
+    !!data.settings &&
+    typeof data.settings === 'object'
+  )
+}
+
 const fileRef = ref<HTMLInputElement | null>(null)
 
 function pickFile() {
@@ -512,17 +565,18 @@ async function onFileChange(e: Event) {
   if (!file) return
   input.value = ''
   await runGuarded(importing, async () => {
-    let pkg: BackupPackage | null = null
+    let raw: unknown = null
     try {
-      pkg = JSON.parse(await readFileAsText(file)) as BackupPackage
+      raw = JSON.parse(await readFileAsText(file))
     } catch {
       showToast({ type: 'fail', message: '文件格式不正确，请选择本应用导出的备份文件' })
       return
     }
-    if (!pkg || !pkg.data) {
-      showToast({ type: 'fail', message: '文件格式不正确，缺少备份数据' })
+    if (!isValidBackupPackage(raw)) {
+      showToast({ type: 'fail', message: '文件格式不正确，不是本应用导出的备份文件' })
       return
     }
+    const pkg: BackupPackage = raw
     const count = (pkg.data.records || []).length
     const confirmed = await confirmAction({
       title: '导入备份',

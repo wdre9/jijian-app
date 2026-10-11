@@ -147,6 +147,8 @@ interface InstallPromptEvent extends Event {
 
 let deferredPrompt: InstallPromptEvent | null = null
 
+let displayModeMql: MediaQueryList | null = null
+
 /** Chromium 内核浏览器是否已抛出可直接触发的安装事件 */
 export const installPromptReady = ref(false)
 
@@ -165,37 +167,61 @@ export async function promptInstall(): Promise<boolean> {
   }
 }
 
+function onBeforeInstallPrompt(e: Event): void {
+  e.preventDefault()
+  deferredPrompt = e as InstallPromptEvent
+  installPromptReady.value = true
+}
+
+function onAppInstalled(): void {
+  deferredPrompt = null
+  installPromptReady.value = false
+  dismissInstallTipForever()
+  refreshEnv()
+}
+
+function onDisplayModeChange(): void {
+  refreshEnv()
+}
+
+function onDocVisibilityChange(): void {
+  if (!document.hidden) refreshEnv()
+}
+
 /** 应用启动时调用一次：监听安装事件与显示模式变化 */
 export function initInstall(): void {
   refreshEnv()
 
   if (typeof window === 'undefined') return
 
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault()
-    deferredPrompt = e as InstallPromptEvent
-    installPromptReady.value = true
-  })
-
-  window.addEventListener('appinstalled', () => {
-    deferredPrompt = null
-    installPromptReady.value = false
-    dismissInstallTipForever()
-    refreshEnv()
-  })
+  window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+  window.addEventListener('appinstalled', onAppInstalled)
 
   try {
-    const mql = window.matchMedia('(display-mode: standalone)')
-    if (mql && typeof mql.addEventListener === 'function') {
-      mql.addEventListener('change', refreshEnv)
+    displayModeMql = window.matchMedia('(display-mode: standalone)')
+    if (displayModeMql && typeof displayModeMql.addEventListener === 'function') {
+      displayModeMql.addEventListener('change', onDisplayModeChange)
     }
   } catch {
     /* 忽略 */
   }
 
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) refreshEnv()
-  })
+  document.addEventListener('visibilitychange', onDocVisibilityChange)
+}
+
+/** 清理安装相关监听器（组件卸载时调用，避免重复监听） */
+export function disposeInstall(): void {
+  if (typeof window === 'undefined') return
+  window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+  window.removeEventListener('appinstalled', onAppInstalled)
+  try {
+    if (displayModeMql && typeof displayModeMql.removeEventListener === 'function') {
+      displayModeMql.removeEventListener('change', onDisplayModeChange)
+    }
+  } catch {
+    /* 忽略 */
+  }
+  document.removeEventListener('visibilitychange', onDocVisibilityChange)
 }
 
 /* ------------------------------ 网址复制 ------------------------------ */
