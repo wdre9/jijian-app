@@ -24,9 +24,8 @@ defineProps<{
   options: Option[]
 }>()
 
-// 使用宽松的出参类型，方便上层以联合类型（如 'day' | 'night'）双向绑定
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const emit = defineEmits<{ (e: 'update:modelValue', value: any): void }>()
+// 出参类型与 props.modelValue 保持一致（string）；上层以联合类型双向绑定时由 TS 协变兼容
+const emit = defineEmits<{ (e: 'update:modelValue', value: string): void }>()
 </script>
 
 <style scoped>

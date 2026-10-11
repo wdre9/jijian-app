@@ -219,7 +219,7 @@ import { useAppStore } from '@/stores/app'
 import { confirmAction } from '@/utils/dialog'
 import { runGuarded } from '@/utils/async'
 import type { BackupPackage } from '@/types'
-import { money, moneyShort, qty, round } from '@/utils/format'
+import { money, qty, round } from '@/utils/format'
 import { addDays, currentMonthKey, currentMonthRange, fileStamp, todayStr } from '@/utils/date'
 import {
   byDate,
@@ -626,8 +626,6 @@ async function askClear() {
     }
   }, { label: '清空' })
 }
-
-void moneyShort
 </script>
 
 <style scoped>

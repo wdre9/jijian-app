@@ -1,4 +1,5 @@
-import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
+import { Capacitor } from '@capacitor/core'
+import { createRouter, createWebHashHistory, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { closeDialog, closeToast } from 'vant'
 
 /**
@@ -88,7 +89,9 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-  history: createWebHashHistory(),
+  // 原生端（Capacitor WebView 以 http://localhost 提供资源）用 history 模式，避免 hash 丢失；
+  // Web/PWA（GitHub Pages 等静态托管）保留 hash 模式保证刷新可用。
+  history: Capacitor.isNativePlatform() ? createWebHistory() : createWebHashHistory(),
   routes,
   scrollBehavior() {
     return { top: 0 }

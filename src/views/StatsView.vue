@@ -266,7 +266,7 @@ const rangeLabel = computed(
 
 const days = computed(() => dateList(resolved.value.start, resolved.value.end).length)
 
-const nowText = formatDateTime(Date.now())
+const nowText = computed(() => formatDateTime(Date.now()))
 
 /* ----------------------------- 数据 ----------------------------- */
 const rangeRecords = computed(() =>

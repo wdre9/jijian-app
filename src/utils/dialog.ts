@@ -41,9 +41,18 @@ export async function confirmAction(options: ConfirmActionOptions): Promise<bool
     confirmed = false
   }
   if (confirmed) {
-    await options.onConfirm?.()
+    try {
+      await options.onConfirm?.()
+    } catch (e) {
+      // 组件可能已卸载（回调访问已卸载状态时兜底），避免未捕获异常击穿调用栈
+      console.warn('[dialog] onConfirm 回调执行异常', e)
+    }
   } else {
-    options.onCancel?.()
+    try {
+      options.onCancel?.()
+    } catch (e) {
+      console.warn('[dialog] onCancel 回调执行异常', e)
+    }
   }
   return confirmed
 }

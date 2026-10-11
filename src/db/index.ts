@@ -10,7 +10,8 @@
 import localforage from 'localforage'
 import { Capacitor } from '@capacitor/core'
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
-import type { AppSettings, BackupPackage, DataDoc } from '@/types'
+import type { AppSettings, BackupPackage, DataDoc, PieceRecord } from '@/types'
+import { round } from '@/utils/format'
 import { withTimeout } from '@/utils/async'
 
 /** 主文档读写/自动备份的兜底超时（毫秒），超时按当前内存态继续，防止原生桥接悬挂 */
@@ -138,6 +139,34 @@ export function migrateDoc(raw: unknown): DataDoc {
 const LEGACY_STORES = ['records', 'products', 'processes', 'workers', 'meta'] as const
 const LEGACY_SETTINGS_KEY = 'app-settings'
 
+/** 旧数据迁移：把 legacy store 中宽松结构的记录规范化为 PieceRecord（字段缺失用默认值兜底），替代 as 断言穿透 */
+function normalizeLegacyRecord(item: unknown): PieceRecord | null {
+  if (!item || typeof item !== 'object') return null
+  const o = item as Record<string, unknown>
+  if (typeof o.id !== 'string' || typeof o.date !== 'string') return null
+  const id = o.id as string
+  const date = o.date as string
+  const quantity = Number(o.quantity) || 0
+  const price = Number(o.price) || 0
+  const createdAt = typeof o.createdAt === 'number' ? (o.createdAt as number) : Date.now()
+  return {
+    id,
+    date,
+    productId: typeof o.productId === 'string' ? (o.productId as string) : '',
+    processId: typeof o.processId === 'string' ? (o.processId as string) : '',
+    quantity,
+    price,
+    amount: Number.isFinite(Number(o.amount)) ? Number(o.amount) : round(quantity * price, 2),
+    worker: typeof o.worker === 'string' ? (o.worker as string) : '',
+    shift: o.shift === 'night' ? 'night' : 'day',
+    note: typeof o.note === 'string' ? (o.note as string) : '',
+    countMode: o.countMode === 'manual' ? 'manual' : 'auto',
+    count: typeof o.count === 'number' ? (o.count as number) : undefined,
+    createdAt,
+    updatedAt: typeof o.updatedAt === 'number' ? (o.updatedAt as number) : createdAt
+  }
+}
+
 async function collectLegacyData(): Promise<DataDoc | null> {
   const doc = emptyDoc()
   let hasAny = false
@@ -154,8 +183,13 @@ async function collectLegacyData(): Promise<DataDoc | null> {
         return
       }
       if (Array.isArray(value)) return
-      if (name === 'records') doc.records.push(item as never)
-      else if (name === 'products') doc.products.push(item as never)
+      if (name === 'records') {
+        const r = normalizeLegacyRecord(item)
+        if (r) {
+          doc.records.push(r)
+          hasAny = true
+        }
+      } else if (name === 'products') doc.products.push(item as never)
       else if (name === 'processes') doc.processes.push(item as never)
       else if (name === 'workers') doc.workers.push(item as never)
       hasAny = true
