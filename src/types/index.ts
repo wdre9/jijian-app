@@ -43,7 +43,10 @@ export interface PieceRecord {
   /** 生产日期 YYYY-MM-DD */
   date: string
   productId: string
+  /** 工序 ID；工序三态下可为空字符串（手动输入/不填工序时留空） */
   processId: string
+  /** 工序名称快照（工序三态）：选已有→工序名；手动输入→自定义名；不填/空→空字符串 */
+  processNameSnapshot?: string
   /** 数量 */
   quantity: number
   /** 单价快照（元/件） */
@@ -54,6 +57,10 @@ export interface PieceRecord {
   worker: string
   shift: Shift
   note: string
+  /** 次数模式：auto=自动实时计算（不落库）；manual=手动输入 */
+  countMode: 'auto' | 'manual'
+  /** 手动模式下的次数值；自动模式不落库 */
+  count?: number
   createdAt: number
   updatedAt: number
 }
@@ -139,5 +146,31 @@ export interface DataDocV1 {
   settings: AppSettings
 }
 
-/** 当前文档类型；未来版本通过联合类型扩展（DataDoc = DataDocV1 | DataDocV2 ...） */
-export type DataDoc = DataDocV1
+/** 单文档 v2 结构：记录新增 countMode / count（次数功能），其余与 v1 一致 */
+export interface DataDocV2 {
+  /** 结构版本，由迁移链管理 */
+  schemaVersion: 2
+  /** 最近一次保存时间（ms） */
+  savedAt: number
+  records: PieceRecord[]
+  products: Product[]
+  processes: Process[]
+  workers: Worker[]
+  settings: AppSettings
+}
+
+/** 单文档 v3 结构：记录新增 processNameSnapshot（工序名称快照，工序三态），其余与 v2 一致 */
+export interface DataDocV3 {
+  /** 结构版本，由迁移链管理 */
+  schemaVersion: 3
+  /** 最近一次保存时间（ms） */
+  savedAt: number
+  records: PieceRecord[]
+  products: Product[]
+  processes: Process[]
+  workers: Worker[]
+  settings: AppSettings
+}
+
+/** 当前文档类型；未来版本通过联合类型扩展（DataDoc = DataDocV1 | DataDocV2 | DataDocV3 ...） */
+export type DataDoc = DataDocV1 | DataDocV2 | DataDocV3

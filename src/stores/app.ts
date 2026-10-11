@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import type { AppSettings, BackupPackage, DataDoc, PieceRecord, Process, Product, Worker } from '@/types'
 import * as db from '@/db'
 import { maybeAutoBackup } from '@/utils/autobackup'
-import { round, uid } from '@/utils/format'
+import { round, toNum, uid } from '@/utils/format'
 import { todayStr, weekRange, currentMonthRange } from '@/utils/date'
 import { withTimeout } from '@/utils/async'
 
@@ -14,7 +14,10 @@ const INIT_TIMEOUT_MS = 10000
 export interface RecordInput {
   date: string
   productId: string
+  /** 工序 ID；工序三态下可为空字符串（手动输入/不填工序时留空） */
   processId: string
+  /** 可选：工序名称快照（工序三态），选已有→工序名；手动输入→自定义名；不填/空→空字符串 */
+  processNameSnapshot?: string
   quantity: number
   price: number
   worker: string
@@ -22,6 +25,10 @@ export interface RecordInput {
   note: string
   /** 可选：金额覆盖（批量导入时三位小数原样存储；缺省按 数量×单价 重算两位） */
   amount?: number
+  /** 可选：次数模式，缺省按 auto 处理 */
+  countMode?: 'auto' | 'manual'
+  /** 可选：手动模式下的次数值；自动模式不传 */
+  count?: number
 }
 
 /** 批量导入单行（来自文本/OCR 解析草稿） */
@@ -36,6 +43,10 @@ export interface BulkRow {
   note: string
   /** 可选：金额覆盖 */
   amount?: number
+  /** 可选：次数模式，缺省按 auto 处理 */
+  countMode?: 'auto' | 'manual'
+  /** 可选：手动模式下的次数值；自动模式不传 */
+  count?: number
   /** 原始行文本，失败时用于回显 */
   raw?: string
 }
@@ -143,6 +154,8 @@ export const useAppStore = defineStore('app', () => {
       worker: input.worker || '',
       shift: input.shift,
       note: input.note || '',
+      countMode: input.countMode === 'manual' ? 'manual' : 'auto',
+      count: input.countMode === 'manual' ? Math.max(0, Math.round(toNum(input.count) || 0)) : undefined,
       createdAt: now,
       updatedAt: now
     }
@@ -160,17 +173,21 @@ export const useAppStore = defineStore('app', () => {
   async function updateRecord(id: string, input: RecordInput): Promise<void> {
     const rec = records.value.find((r) => r.id === id)
     if (!rec) return
+    const countMode: 'auto' | 'manual' = input.countMode === 'manual' ? 'manual' : 'auto'
     const next: PieceRecord = {
       ...rec,
       date: input.date,
       productId: input.productId,
       processId: input.processId,
+      processNameSnapshot: input.processNameSnapshot,
       quantity: round(input.quantity, 2),
       price: round(input.price, 4),
       amount: input.amount !== undefined ? round(input.amount, 3) : calcAmount(input.quantity, input.price),
       worker: input.worker || '',
       shift: input.shift,
       note: input.note || '',
+      countMode,
+      count: countMode === 'manual' ? Math.max(0, Math.round(toNum(input.count) || 0)) : undefined,
       updatedAt: Date.now()
     }
     const idx = records.value.findIndex((r) => r.id === id)
@@ -239,17 +256,21 @@ export const useAppStore = defineStore('app', () => {
           processes.value.push(process)
         }
         const now = Date.now()
+        const countMode: 'auto' | 'manual' = input.countMode === 'manual' ? 'manual' : 'auto'
         records.value.push({
           id: uid('r'),
           date: input.date.trim(),
           productId: product.id,
           processId: process.id,
+          processNameSnapshot: process.name,
           quantity: round(input.quantity, 2),
           price: round(input.price, 4),
           amount: input.amount !== undefined ? round(input.amount, 3) : calcAmount(input.quantity, input.price),
           worker: (input.worker || '').trim(),
           shift: input.shift,
           note: input.note || '',
+          countMode,
+          count: countMode === 'manual' ? Math.max(0, Math.round(toNum(input.count) || 0)) : undefined,
           createdAt: now,
           updatedAt: now
         })

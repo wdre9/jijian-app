@@ -49,7 +49,7 @@
 
         <!-- 工序 -->
         <div v-if="form.productId" class="field">
-          <div class="field__label">工序（点选自动带出单价）</div>
+          <div class="field__label">工序</div>
           <div v-if="currentProcesses.length" class="kw-wrap">
             <van-icon name="search" size="14" color="var(--app-text-3)" />
             <input v-model="processKw" class="kw-input" placeholder="搜索工序" />
@@ -68,7 +68,7 @@
                 :key="o.id"
                 type="button"
                 class="chip chip--process"
-                :class="{ 'is-active': o.id === form.processId }"
+                :class="{ 'is-active': form.processMode === 'exist' && o.id === form.processId }"
                 @click="pickProcess(o.id)"
               >
                 <span class="chip__name ellipsis">{{ o.name }}</span>
@@ -77,7 +77,33 @@
             </template>
             <div v-else class="hint-line no-match">无匹配项</div>
           </div>
-          <div v-else class="hint-line">该产品暂无工序，请先在「产品与工序」中添加</div>
+          <div v-else class="hint-line">该产品暂无工序，可手动输入或选择不填</div>
+
+          <div class="chips chips--opt" style="margin-top: 8px">
+            <button
+              type="button"
+              class="chip chip--opt"
+              :class="{ 'is-active': form.processMode === 'manual' }"
+              @click="pickManual"
+            >
+              手动输入
+            </button>
+            <button
+              type="button"
+              class="chip chip--opt"
+              :class="{ 'is-active': form.processMode === 'none' }"
+              @click="pickNone"
+            >
+              不填工序
+            </button>
+          </div>
+          <div v-if="form.processMode === 'manual'" class="manual-line">
+            <input
+              class="text-input"
+              v-model="form.manualProcessName"
+              placeholder="输入自定义工序名（不自动带出单价）"
+            />
+          </div>
         </div>
 
         <!-- 数量 / 单价 -->
@@ -162,6 +188,27 @@
           <div class="field__label">备注（可选）</div>
           <input class="text-input" v-model="form.note" placeholder="如：返工 5 件、加急单" />
         </div>
+
+        <!-- 次数 -->
+        <div class="field">
+          <div class="field__label">次数</div>
+          <RangeTabs v-model="countMode" :options="countModeOptions" />
+          <div v-if="countMode === 'auto'" class="count-line">{{ autoText }}</div>
+          <template v-else>
+            <div class="count-line count-line--manual">
+              <input
+                class="count-input"
+                type="number"
+                inputmode="numeric"
+                v-model="manualCountStr"
+                placeholder="填次数"
+                @blur="normalizeManualCount"
+              />
+              <span class="count-unit">次</span>
+            </div>
+            <div v-if="lastManualTip" class="count-tip">{{ lastManualTip }}</div>
+          </template>
+        </div>
       </div>
 
       <div class="sheet__foot">
@@ -214,12 +261,63 @@ const shiftOptions = [
   { label: '夜班', value: 'night' }
 ]
 
+const countModeOptions = [
+  { label: '自动', value: 'auto' },
+  { label: '手动', value: 'manual' }
+]
+
+/** 次数：auto=自动实时计算；manual=手动输入 */
+const countMode = ref<'auto' | 'manual'>('auto')
+const manualCountStr = ref('')
+const lastManualTip = ref('')
+
+/** 自动次数：= 该产品历史记录数 + 1（第 N+1 次） */
+const autoText = computed(() => {
+  if (!form.productId) return '请先选择产品'
+  const n = store.records.filter((r) => r.productId === form.productId).length + 1
+  return `第 ${n} 次（按该产品历史实时计算）`
+})
+
+/** 该产品最近一条手动记录的次数；无则返回 null */
+function lastManualCountOf(): number | null {
+  if (!form.productId) return null
+  const list = store.records
+    .filter((r) => r.productId === form.productId && r.countMode === 'manual')
+    .sort((a, b) => b.createdAt - a.createdAt)
+  return list.length ? list[0].count ?? 0 : null
+}
+
+/** 切到手动模式：预填该产品上次手动次数 +1，并提示上次 */
+function refreshManualPrefill() {
+  if (countMode.value !== 'manual') return
+  const last = lastManualCountOf()
+  if (last !== null) {
+    manualCountStr.value = String(last + 1)
+    lastManualTip.value = `上次：第 ${last} 次`
+  } else {
+    manualCountStr.value = ''
+    lastManualTip.value = '暂无手动次数记录，请填写次数'
+  }
+}
+
+function normalizeManualCount() {
+  manualCountStr.value = String(Math.max(0, Math.round(toNum(manualCountStr.value) || 0)))
+}
+
+watch(countMode, () => {
+  refreshManualPrefill()
+})
+
 const quickQty = [10, 50, 100]
 
 const form = reactive({
   date: todayStr(),
   productId: '',
   processId: '',
+  /** 工序三态：exist=已有工序；manual=手动输入自定义工序；none=不填工序（留空） */
+  processMode: 'none' as 'exist' | 'manual' | 'none',
+  /** 手动输入的自定义工序名（快照来源） */
+  manualProcessName: '',
   quantity: 0,
   price: 0,
   worker: '',
@@ -262,9 +360,13 @@ const filteredWorkers = computed(() => {
   return workerOptions.value.filter((w) => w.toLowerCase().includes(kw))
 })
 const amount = computed(() => round(toNum(form.quantity) * toNum(form.price), 2))
-const canSave = computed(
-  () => !!form.productId && !!form.processId && toNum(form.quantity) > 0
-)
+/** 可保存：产品必填、数量必填；工序三态中 exist 需已选工序、manual 需输入名称、none 允许留空 */
+const canSave = computed(() => {
+  if (!form.productId || toNum(form.quantity) <= 0) return false
+  if (form.processMode === 'exist') return !!form.processId
+  if (form.processMode === 'manual') return !!form.manualProcessName.trim()
+  return true
+})
 
 watch(
   () => props.show,
@@ -298,6 +400,8 @@ function reset() {
   form.price = 0
   form.productId = props.presetProductId || (s.rememberLast ? s.lastProductId : '') || ''
   form.processId = ''
+  form.processMode = 'none'
+  form.manualProcessName = ''
 
   if (form.productId && !store.products.some((p) => p.id === form.productId)) {
     form.productId = ''
@@ -310,6 +414,7 @@ function reset() {
   const prefer = props.presetProcessId || (s.rememberLast ? s.lastProcessId : '')
   const hit = list.find((o) => o.id === prefer) || list[0]
   if (hit) {
+    form.processMode = 'exist'
     form.processId = hit.id
     form.price = hit.price
   }
@@ -321,13 +426,31 @@ function pickProduct(id: string) {
   const hit = list[0]
   form.processId = hit?.id || ''
   form.price = hit?.price || 0
-  if (!form.processId) showToast('该产品还没有工序')
+  form.processMode = hit ? 'exist' : 'none'
+  form.manualProcessName = ''
+  if (!form.processId) showToast('该产品暂无工序，可手动输入或选择不填')
+  // 换产品后，手动模式需重新按新产品查上次次数预填
+  refreshManualPrefill()
 }
 
 function pickProcess(id: string) {
+  form.processMode = 'exist'
   form.processId = id
   const o = store.processes.find((x) => x.id === id)
   if (o) form.price = o.price
+}
+
+/** 手动输入模式：清空已选工序，单价由用户自填 */
+function pickManual() {
+  form.processMode = 'manual'
+  form.processId = ''
+}
+
+/** 不填工序模式：两者皆空 */
+function pickNone() {
+  form.processMode = 'none'
+  form.processId = ''
+  form.manualProcessName = ''
 }
 
 function stepQty(d: number) {
@@ -354,25 +477,42 @@ async function save(again: boolean) {
   normalizeQty()
   normalizePrice()
   if (!canSave.value) {
-    showToast('请选择产品与工序，并填写数量')
+    showToast('请选择产品，并填写数量与工序（或不填）')
     return
   }
+  // 工序三态落库：选已有→写 processId+快照；手动输入→写快照、processId 留空；不填→两者皆空
+  const isExist = form.processMode === 'exist'
+  const processId = isExist ? form.processId : ''
+  const processNameSnapshot = isExist
+    ? store.processMap.get(form.processId)?.name || ''
+    : form.processMode === 'manual'
+      ? form.manualProcessName.trim()
+      : ''
   await runGuarded(saving, async () => {
     await store.addRecord({
       date: form.date,
       productId: form.productId,
-      processId: form.processId,
+      processId,
+      processNameSnapshot,
       quantity: form.quantity,
       price: form.price,
       worker: form.worker.trim(),
       shift: form.shift,
-      note: form.note.trim()
+      note: form.note.trim(),
+      countMode: countMode.value,
+      count: countMode.value === 'manual' ? Math.round(toNum(manualCountStr.value) || 0) : undefined
     })
     emit('saved')
     if (again) {
       showToast('已保存，继续记下一笔')
       form.quantity = 0
       form.note = ''
+      // 再记一笔：清空次数输入但保持模式；手动模式提示最新上次次数
+      manualCountStr.value = ''
+      if (countMode.value === 'manual') {
+        const last = lastManualCountOf()
+        lastManualTip.value = last !== null ? `上次：第 ${last} 次` : '暂无手动次数记录，请填写次数'
+      }
     } else {
       showToast('已保存')
       emit('update:show', false)
@@ -644,5 +784,44 @@ if (props.show) reset()
 
 .btn-save {
   flex: 1;
+}
+
+.count-line {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text-2);
+}
+
+.count-line--manual {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.count-input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  border: 1px solid var(--app-line);
+  border-radius: 10px;
+  background: var(--app-card-2);
+  padding: 0 12px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--app-text);
+  font-family: inherit;
+  outline: none;
+}
+
+.count-unit {
+  font-size: 12px;
+  color: var(--app-text-3);
+}
+
+.count-tip {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--app-text-3);
 }
 </style>

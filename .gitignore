@@ -10,3 +10,5 @@ npm-debug.log*
 # gradle 构建临时产物（不入库）
 android/build_log.txt
 android/build_pid.txt
+
+android/build_release*.log.err

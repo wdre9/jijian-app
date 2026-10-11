@@ -273,7 +273,7 @@ import {
   todayStr,
   weekRange
 } from '@/utils/date'
-import { enrich, sumAmount } from '@/utils/stats'
+import { enrich, recordCountLabel, sumAmount } from '@/utils/stats'
 import { countText, detailAoa, exportWorkbook } from '@/utils/exporter'
 import { fileStamp } from '@/utils/date'
 import RecordItem from '@/components/RecordItem.vue'
@@ -516,7 +516,7 @@ async function exportCurrent() {
   try {
     const sorted = [...rows.value].sort((a, b) => (a.date < b.date ? -1 : 1))
     const res = await exportWorkbook(
-      [{ name: '计件明细', aoa: detailAoa(sorted, specOf) }],
+      [{ name: '计件明细', aoa: detailAoa(sorted, specOf, (r) => recordCountLabel(r, store.records)) }],
       `计件明细_${filters.range}_${fileStamp()}.xlsx`
     )
     showToast({
@@ -541,7 +541,7 @@ async function exportSelected() {
     const set = new Set(selected.value)
     const list = rows.value.filter((r) => set.has(r.id)).sort((a, b) => (a.date < b.date ? -1 : 1))
     const res = await exportWorkbook(
-      [{ name: '选中明细', aoa: detailAoa(list, specOf) }],
+      [{ name: '选中明细', aoa: detailAoa(list, specOf, (r) => recordCountLabel(r, store.records)) }],
       `选中计件明细_${fileStamp()}.xlsx`
     )
     showToast({

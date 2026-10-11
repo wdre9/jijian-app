@@ -5,6 +5,16 @@ import type { PieceRecord, Process, Product, RecordRow, SummaryRow } from '@/typ
 import { round } from '@/utils/format'
 import { monthKey } from '@/utils/date'
 
+/** 记录工序显示名：优先工序名称快照，其次按 processMap 回退；未填（processId 为空且无快照）→ 未填工序，已删除 → 已删除工序 */
+export function processDisplayName(
+  r: Pick<PieceRecord, 'processId' | 'processNameSnapshot'>,
+  processMap: Map<string, Process>
+): string {
+  if (r.processNameSnapshot) return r.processNameSnapshot
+  if (!r.processId) return '未填工序'
+  return processMap.get(r.processId)?.name || '已删除工序'
+}
+
 export function enrich(
   records: PieceRecord[],
   productMap: Map<string, Product>,
@@ -13,7 +23,7 @@ export function enrich(
   return records.map((r) => ({
     ...r,
     productName: productMap.get(r.productId)?.name || '已删除产品',
-    processName: processMap.get(r.processId)?.name || '已删除工序'
+    processName: processDisplayName(r, processMap)
   }))
 }
 
@@ -94,10 +104,9 @@ export function byProcess(
     records,
     (r) => r.processId,
     (r) => {
-      const o = processMap.get(r.processId)
       const p = productMap?.get(r.productId)
       return {
-        label: o?.name || '已删除工序',
+        label: processDisplayName(r, processMap),
         sub: p ? p.name : ''
       }
     }
@@ -138,7 +147,7 @@ export function byProductProcess(
     records,
     (r) => `${r.productId}|${r.processId}`,
     (r) => ({
-      label: processMap.get(r.processId)?.name || '已删除工序',
+      label: processDisplayName(r, processMap),
       sub: productMap.get(r.productId)?.name || '已删除产品'
     })
   )
@@ -196,4 +205,24 @@ export function avgPricePerPiece(records: PieceRecord[]): number {
   const q = sumQty(records)
   if (!q) return 0
   return round(sumAmount(records) / q, 4)
+}
+
+/**
+ * 计算记录的展示次数文案（第 N 次）：
+ * - 手动模式：直接取 count 值；
+ * - 自动模式：按该产品全部历史记录按创建时间排序后的序号（含本条）。
+ * 无法确定时返回空串。
+ */
+export function recordCountLabel(
+  record: Pick<PieceRecord, 'id' | 'productId' | 'countMode' | 'count' | 'createdAt'>,
+  all: PieceRecord[]
+): string {
+  if (record.countMode === 'manual') {
+    return record.count != null ? `第 ${record.count} 次` : ''
+  }
+  const list = all
+    .filter((x) => x.productId === record.productId)
+    .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1))
+  const idx = list.findIndex((x) => x.id === record.id)
+  return idx >= 0 ? `第 ${idx + 1} 次` : ''
 }

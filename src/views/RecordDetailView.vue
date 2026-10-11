@@ -33,6 +33,7 @@
           <van-cell title="金额" :value="`¥${money(row.amount)}`" />
           <van-cell title="工人" :value="row.worker || '未填写'" />
           <van-cell title="备注" :value="row.note || '无'" />
+          <van-cell title="次数" :value="countText || '未填写'" />
         </van-cell-group>
 
         <van-cell-group inset title="操作信息">
@@ -68,6 +69,7 @@ import { runGuarded } from '@/utils/async'
 import { money, priceText, qty, round } from '@/utils/format'
 import { formatDateTime, friendlyDate, todayStr, weekdayCn } from '@/utils/date'
 import EmptyState from '@/components/EmptyState.vue'
+import { recordCountLabel, processDisplayName } from '@/utils/stats'
 
 const route = useRoute()
 const router = useRouter()
@@ -80,11 +82,14 @@ const row = computed(() => {
   return {
     ...rec,
     productName: store.productName(rec.productId),
-    processName: store.processName(rec.processId)
+    processName: processDisplayName(rec, store.processMap)
   }
 })
 
 const spec = computed(() => store.productMap.get(row.value?.productId || '')?.spec || '')
+
+/** 次数展示：手动取 count；自动按该产品历史创建时间序号计算（第 N 次） */
+const countText = computed(() => (row.value ? recordCountLabel(row.value, store.records) : ''))
 
 onMounted(() => {
   if (!store.ready) store.init()
@@ -100,11 +105,15 @@ async function addAgain() {
       date: todayStr(),
       productId: r.productId,
       processId: r.processId,
+      processNameSnapshot: r.processNameSnapshot,
       quantity: r.quantity,
       price: round(store.processMap.get(r.processId)?.price || r.price, 4),
       worker: r.worker,
       shift: r.shift,
-      note: ''
+      note: '',
+      // 沿用原次数模式：自动不传 count；手动预填原 count + 1
+      countMode: r.countMode === 'manual' ? 'manual' : 'auto',
+      count: r.countMode === 'manual' ? (r.count ?? 0) + 1 : undefined
     })
     showToast('已按同样数量再记一笔')
   }, { label: '操作' })

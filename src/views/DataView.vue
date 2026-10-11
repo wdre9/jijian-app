@@ -225,6 +225,7 @@ import {
   byWorker,
   enrich,
   monthBuckets,
+  recordCountLabel,
   sumAmount,
   sumQty
 } from '@/utils/stats'
@@ -369,7 +370,7 @@ async function exportDetailExcel() {
     )
     const filename = `计件明细_${scopeName()}_${fileStamp()}.xlsx`
     const res = await exportWorkbook(
-      [{ name: '计件明细', aoa: detailAoa(rows, (id) => store.productMap.get(id)?.spec || '') }],
+      [{ name: '计件明细', aoa: detailAoa(rows, (id) => store.productMap.get(id)?.spec || '', (r) => recordCountLabel(r, store.records)) }],
       filename
     )
     recordExport('detail', filename, res.mode === 'native' ? res.display : '浏览器下载')
@@ -392,7 +393,7 @@ async function exportDetailCsv() {
     )
     const filename = `计件明细_${scopeName()}_${fileStamp()}.csv`
     const res = await downloadText(
-      detailCsv(rows, (id) => store.productMap.get(id)?.spec || ''),
+      detailCsv(rows, (id) => store.productMap.get(id)?.spec || '', (r) => recordCountLabel(r, store.records)),
       filename
     )
     recordExport('detail', filename, res.mode === 'native' ? res.display : '浏览器下载')

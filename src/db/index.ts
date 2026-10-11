@@ -23,7 +23,7 @@ const FILE_DIR = 'jijian-data'
 const FILE_NAME = 'jijian-doc.json'
 
 /** 当前文档 schema 版本 */
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 3
 
 /**
  * 主存储：强制 localStorage。
@@ -77,6 +77,22 @@ export function emptyDoc(): DataDoc {
  */
 export const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record<string, unknown>> = {
   // v1 为基线版本，无需迁移步骤
+  // v2：记录新增次数字段 countMode/count。旧记录一律视为自动模式（countMode='auto'），
+  // 不补 count（自动模式不落库）；历史数据保持原样，仅做字段兜底。
+  2: (raw) => {
+    const records = Array.isArray(raw.records) ? raw.records : []
+    raw.records = records.map((item) => {
+      if (item && typeof item === 'object') {
+        const rec = item as Record<string, unknown>
+        if (typeof rec.countMode === 'undefined') rec.countMode = 'auto'
+      }
+      return item
+    })
+    return raw
+  },
+  // v3：记录新增工序名称快照字段 processNameSnapshot（工序三态）。
+  // 旧记录不补快照（兼容），展示层按 processMap 回退解析；仅提升结构版本。
+  3: (raw) => raw
 }
 
 /** 把任意来源的原始文档沿迁移链升级到当前版本，并兜底补齐字段 */

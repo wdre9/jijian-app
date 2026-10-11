@@ -250,32 +250,48 @@ export const DETAIL_HEADER = [
   '金额(元)',
   '工人',
   '班次',
-  '备注'
+  '备注',
+  '次数模式',
+  '次数'
 ]
 
-/** 明细记录 -> 二维数组 */
+/**
+ * 明细记录 -> 二维数组
+ * countOf：每行次数展示值。默认手动模式导出 count 值、自动模式导出空（自动为实时计算，
+ * 不落库）；如需导出当前计算次数，可传入 recordCountLabel 等计算函数。
+ */
 export function detailAoa(
   rows: RecordRow[],
-  specOf: (productId: string) => string = () => ''
+  specOf: (productId: string) => string = () => '',
+  countOf: (r: RecordRow) => string | number = (r) =>
+    r.countMode === 'manual' ? (r.count ?? '') : ''
 ): Array<Array<string | number>> {
   const body = rows.map((r) => [
     r.date,
     r.productName,
     specOf(r.productId),
-    r.processName,
+    // 工序列：优先快照/已解析名称，空则导出「未填工序」
+    r.processName || r.processNameSnapshot || '未填工序',
     r.quantity,
     priceText(r.price),
     r.amount,
     r.worker || '',
     r.shift === 'night' ? '夜班' : '白班',
-    r.note || ''
+    r.note || '',
+    r.countMode === 'manual' ? '手动' : '自动',
+    countOf(r)
   ])
   return [DETAIL_HEADER, ...body]
 }
 
 /** 明细 -> CSV 文本 */
-export function detailCsv(rows: RecordRow[], specOf: (productId: string) => string = () => ''): string {
-  return detailAoa(rows, specOf)
+export function detailCsv(
+  rows: RecordRow[],
+  specOf: (productId: string) => string = () => '',
+  countOf: (r: RecordRow) => string | number = (r) =>
+    r.countMode === 'manual' ? (r.count ?? '') : ''
+): string {
+  return detailAoa(rows, specOf, countOf)
     .map((row) =>
       row
         .map((cell) => {

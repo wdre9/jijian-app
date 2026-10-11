@@ -202,6 +202,7 @@ import {
   enrich,
   monthBuckets,
   recentMonths,
+  recordCountLabel,
   sumAmount,
   sumQty
 } from '@/utils/stats'
@@ -604,7 +605,7 @@ async function exportExcel() {
 
     const res = await exportWorkbook(
       [
-        { name: '明细', aoa: detailAoa(enriched, (id) => store.productMap.get(id)?.spec || '') },
+        { name: '明细', aoa: detailAoa(enriched, (id) => store.productMap.get(id)?.spec || '', (r) => recordCountLabel(r, store.records)) },
         {
           name: '按产品',
           aoa: aoaSummary(

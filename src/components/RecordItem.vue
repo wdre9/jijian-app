@@ -12,6 +12,8 @@
         <span>¥{{ priceText(row.price) }}/件</span>
         <span v-if="row.worker" class="dot">·</span>
         <span v-if="row.worker">{{ row.worker }}</span>
+        <span v-if="countLabel" class="dot">·</span>
+        <span v-if="countLabel">{{ countLabel }}</span>
         <span v-if="row.shift === 'night'" class="tag tag--night">夜班</span>
       </div>
       <div v-if="row.note" class="rrow__note ellipsis">{{ row.note }}</div>
@@ -30,6 +32,8 @@ import { useRouter } from 'vue-router'
 import type { RecordRow } from '@/types'
 import { money, priceText, qty } from '@/utils/format'
 import { formatTime } from '@/utils/date'
+import { useAppStore } from '@/stores/app'
+import { recordCountLabel } from '@/utils/stats'
 
 const props = withDefaults(
   defineProps<{
@@ -45,8 +49,22 @@ const props = withDefaults(
 const emit = defineEmits<{ (e: 'select'): void }>()
 
 const router = useRouter()
+const store = useAppStore()
 
 const timeText = computed(() => formatTime(props.row.updatedAt || props.row.createdAt))
+
+/** 次数展示：手动取 count；自动按该产品历史创建时间序号计算（第 N 次） */
+const countLabel = computed(() => {
+  const r = props.row
+  if (r.countMode === 'manual') {
+    return r.count != null ? `第 ${r.count} 次` : ''
+  }
+  const list = store.records
+    .filter((x) => x.productId === r.productId)
+    .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1))
+  const idx = list.findIndex((x) => x.id === r.id)
+  return idx >= 0 ? `第 ${idx + 1} 次` : ''
+})
 
 function onClick() {
   if (props.selectable) {
