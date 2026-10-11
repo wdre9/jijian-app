@@ -66,8 +66,8 @@ import { showToast } from 'vant'
 import { useAppStore } from '@/stores/app'
 import { confirmAction } from '@/utils/dialog'
 import { runGuarded } from '@/utils/async'
-import { money, priceText, qty, round } from '@/utils/format'
-import { formatDateTime, friendlyDate, todayStr, weekdayCn } from '@/utils/date'
+import { money, priceText, qty } from '@/utils/format'
+import { formatDateTime, friendlyDate, weekdayCn } from '@/utils/date'
 import EmptyState from '@/components/EmptyState.vue'
 import { recordCountLabel, processDisplayName } from '@/utils/stats'
 
@@ -101,20 +101,9 @@ async function addAgain() {
   const r = row.value
   if (!r) return
   await runGuarded(adding, async () => {
-    await store.addRecord({
-      date: todayStr(),
-      productId: r.productId,
-      processId: r.processId,
-      processNameSnapshot: r.processNameSnapshot,
-      quantity: r.quantity,
-      price: round(store.processMap.get(r.processId)?.price || r.price, 4),
-      worker: r.worker,
-      shift: r.shift,
-      note: '',
-      // 沿用原次数模式：自动不传 count；手动预填原 count + 1
-      countMode: r.countMode === 'manual' ? 'manual' : 'auto',
-      count: r.countMode === 'manual' ? (r.count ?? 0) + 1 : undefined
-    })
+    // A13 预填单点化：预填计算（含手动次数 +1）统一走 store.buildRepeatInput，
+    // 与 addRecord 内 round/toNum 归一化路径保持一致，视图层不散落预填逻辑
+    await store.addRecord(store.buildRepeatInput(r))
     showToast('已按同样数量再记一笔')
   }, { label: '操作' })
 }

@@ -155,6 +155,28 @@ export const useAppStore = defineStore('app', () => {
   const calcAmount = (quantity: number, price: number) =>
     round((Number(quantity) || 0) * (Number(price) || 0), 2)
 
+  /**
+   * 「再记一笔」预填单点方法（A13）：基于已有记录生成新的 RecordInput。
+   * 手动次数预填 (count ?? 0) + 1 等计算集中到 store 层，与 addRecord 内
+   * round/toNum 归一化路径保持一致，视图层不再自行散落预填逻辑。
+   */
+  function buildRepeatInput(rec: PieceRecord): RecordInput {
+    const manual = rec.countMode === 'manual'
+    return {
+      date: todayStr(),
+      productId: rec.productId,
+      processId: rec.processId,
+      processNameSnapshot: rec.processNameSnapshot,
+      quantity: rec.quantity,
+      price: round(processMap.value.get(rec.processId)?.price ?? rec.price, 4),
+      worker: rec.worker,
+      shift: rec.shift,
+      note: '',
+      countMode: manual ? 'manual' : 'auto',
+      count: manual ? (rec.count ?? 0) + 1 : undefined
+    }
+  }
+
   async function addRecord(input: RecordInput): Promise<PieceRecord> {
     const now = Date.now()
     const rec: PieceRecord = {
@@ -587,6 +609,17 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /* ----------------------------- 常用查询 ----------------------------- */
+  /** 当前文档快照（内存态实时汇总，供存储用量估算/导出等场景使用） */
+  const doc = computed<DataDoc>(() => ({
+    schemaVersion: db.SCHEMA_VERSION,
+    savedAt: docCache?.savedAt ?? 0,
+    records: records.value,
+    products: products.value,
+    processes: processes.value,
+    workers: workers.value,
+    settings: settings.value
+  }))
+
   const recordsInRange = (start: string, end: string) =>
     records.value.filter((r) => r.date >= start && r.date <= end)
 
@@ -616,6 +649,7 @@ export const useAppStore = defineStore('app', () => {
     workerOptions,
     todayRecords,
     quickProcesses,
+    doc,
     // helpers
     productName,
     processName,
@@ -625,6 +659,7 @@ export const useAppStore = defineStore('app', () => {
     recordsInMonth,
     recordsInWeek,
     calcAmount,
+    buildRepeatInput,
     // actions
     init,
     addRecord,
