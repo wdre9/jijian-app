@@ -6,6 +6,7 @@ import { maybeAutoBackup } from '@/utils/autobackup'
 import { round, toNum, uid } from '@/utils/format'
 import { todayStr, weekRange, currentMonthRange } from '@/utils/date'
 import { withTimeout } from '@/utils/async'
+import { confirmAction } from '@/utils/dialog'
 
 /** 冷启动初始化兜底超时（毫秒）：超时基于空文档+内存态继续，ready 强制置 true */
 const INIT_TIMEOUT_MS = 10000
@@ -92,6 +93,19 @@ export const useAppStore = defineStore('app', () => {
       // 避免 docCache 为空导致静默跳过落盘、退出应用后数据全部丢失。
       docCache = db.emptyDoc()
     }
+    // 「记录数突降」保护：当前内存态记录数较上次落盘突降 ≥50% 时弹确认，
+    // 防止误清空/异常覆盖导致用户数据大面积丢失（if (!docCache) 兜底只能缓解空文档场景）
+    const prevCount = docCache.records.length
+    const nextCount = records.value.length
+    if (prevCount > 0 && nextCount > 0 && nextCount < prevCount * 0.5) {
+      const confirmed = await confirmAction({
+        title: '数据异常减少',
+        message: `当前记录数（${nextCount}）较上次保存（${prevCount}）减少超过 50%，确认仍要保存吗？`,
+        confirmButtonText: '仍要保存',
+        confirmButtonColor: '#EE0A24'
+      })
+      if (!confirmed) throw new Error('已取消保存：记录数异常减少')
+    }
     docCache.records = records.value
     docCache.products = products.value
     docCache.processes = processes.value
@@ -160,13 +174,14 @@ export const useAppStore = defineStore('app', () => {
       updatedAt: now
     }
     records.value.push(rec)
-    await persist()
+    // 联动更新先改内存态，最后只 persist 一次（原实现触发最多 3 次全量落盘）
     if (settings.value.rememberLast) {
-      await updateSettings({ lastProductId: rec.productId, lastProcessId: rec.processId })
+      settings.value = { ...settings.value, lastProductId: rec.productId, lastProcessId: rec.processId }
     }
     if (rec.worker && !workers.value.some((w) => w.name === rec.worker)) {
-      await addWorker(rec.worker)
+      workers.value.push({ name: rec.worker, createdAt: Date.now() })
     }
+    await persist()
     return rec
   }
 
@@ -405,10 +420,12 @@ export const useAppStore = defineStore('app', () => {
     if (!target) return
     const a = item.sort
     const b = target.sort
-    await Promise.all([
-      updateProcess(item.id, { sort: b }),
-      updateProcess(target.id, { sort: a })
-    ])
+    // 直接改内存态两道 sort 字段，只 persist 一次（原实现两次 updateProcess 各自全量落盘）
+    item.sort = b
+    item.updatedAt = Date.now()
+    target.sort = a
+    target.updatedAt = Date.now()
+    await persist()
   }
 
   /* ----------------------------- 工人操作 ----------------------------- */
@@ -499,19 +516,42 @@ export const useAppStore = defineStore('app', () => {
       }
     ]
 
+    const now = Date.now()
     const created: Array<{ pid: string; oids: Array<{ id: string; price: number }>; worker: string }> = []
     for (const d of demo) {
-      const p = await addProduct({ name: d.product, spec: d.spec })
+      // 直接构建内存态产品/工序/工人，避免逐个 await addProduct/addProcess 触发多次 persist
+      const pid = uid('p')
+      products.value.push({
+        id: pid,
+        name: d.product,
+        spec: d.spec,
+        note: '',
+        createdAt: now,
+        updatedAt: now
+      })
       const oids: Array<{ id: string; price: number }> = []
-      for (const [pn, price] of d.processes) {
-        const o = await addProcess({ productId: p.id, name: pn, price })
-        oids.push({ id: o.id, price })
+      d.processes.forEach(([pn, price], i) => {
+        const oid = uid('o')
+        processes.value.push({
+          id: oid,
+          productId: pid,
+          name: pn,
+          price: round(price, 4),
+          note: '',
+          active: true,
+          sort: i,
+          createdAt: now,
+          updatedAt: now
+        })
+        oids.push({ id: oid, price })
+      })
+      created.push({ pid, oids, worker: d.worker })
+      if (!workers.value.some((w) => w.name === d.worker)) {
+        workers.value.push({ name: d.worker, createdAt: now })
       }
-      created.push({ pid: p.id, oids, worker: d.worker })
     }
 
-    // 生成最近 12 天的记录
-    const today = todayStr()
+    // 生成最近 12 天的记录：直接构建内存态，最后只 persist 一次（原实现 44 次 await persist）
     for (let i = 0; i < 12; i++) {
       const d = new Date()
       d.setDate(d.getDate() - i)
@@ -522,20 +562,28 @@ export const useAppStore = defineStore('app', () => {
       for (let k = 0; k < perDay; k++) {
         const c = created[(i + k) % created.length]
         const o = c.oids[(i + k) % c.oids.length]
-        await addRecord({
+        const qty = 20 + ((i * 7 + k * 13) % 60)
+        const createdAt = Date.now()
+        records.value.push({
+          id: uid('r'),
           date: ds,
           productId: c.pid,
           processId: o.id,
-          quantity: 20 + ((i * 7 + k * 13) % 60),
-          price: o.price,
+          processNameSnapshot: '',
+          quantity: round(qty, 2),
+          price: round(o.price, 4),
+          amount: calcAmount(qty, o.price),
           worker: c.worker,
           shift: (i + k) % 4 === 0 ? 'night' : 'day',
-          note: ''
+          note: '',
+          countMode: 'auto',
+          createdAt,
+          updatedAt: createdAt
         })
       }
     }
-    await updateSettings({ defaultWorker: '张伟' })
-    void today
+    settings.value = { ...settings.value, defaultWorker: '张伟' }
+    await persist()
   }
 
   /* ----------------------------- 常用查询 ----------------------------- */
