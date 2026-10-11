@@ -40,7 +40,7 @@ function normalizeText(s: string): string {
   return s
     .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
     .replace(/[Ａ-Ｚａ-ｚ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
-    .replace(/[×xＸＸ]/g, '×')
+    .replace(/[×Ｘｘ]/g, '×')
     .replace(/＝/g, '=')
     .replace(/／/g, '/')
     .replace(/．/g, '.')
@@ -75,7 +75,7 @@ function matchHeaderDate(line: string, today: string): { date: string; rest: str
 /** 四位数字 = 货号（行首或前接逗号/空格等分隔符；「3500×0.1=350」中的数量不视为货号） */
 const CODE_RE = /(?:^|[^\d])(\d{4})(?!\d)/
 /** 数量×单价=金额（OCR 常见 ×/x/* 混用，= 可能为全角；兼容「×数量×单价=金额」的前导 ×） */
-const QTY_PRICE_RE = /(?:^|[^\d.])(\d+(?:\.\d+)?)\s*[×x*]\s*(\d+(?:\.\d+)?)\s*[=:：]\s*(\d+(?:\.\d+)?)/
+const QTY_PRICE_RE = /(?:^|[^\d.])(\d+(?:\.\d+)?)\s*[×*]\s*(\d+(?:\.\d+)?)\s*[=:：]\s*(\d+(?:\.\d+)?)/
 /** 标题/表头特征行（非账目内容，如「2026年10月计件明细」） */
 const TITLE_RE = /年|明细|汇总|合计|总计|小计|报表|工资|对账|记账/
 /** 尾部残留的 ×数量（无单价） */

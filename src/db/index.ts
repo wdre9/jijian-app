@@ -91,8 +91,20 @@ export const MIGRATIONS: Record<number, (raw: Record<string, unknown>) => Record
     return raw
   },
   // v3：记录新增工序名称快照字段 processNameSnapshot（工序三态）。
-  // 旧记录不补快照（兼容），展示层按 processMap 回退解析；仅提升结构版本。
-  3: (raw) => raw
+  // 旧记录不补快照（兼容），展示层按 processMap 回退解析；同时显式兜底 settings 字段，提升可读性。
+  3: (raw) => {
+    const settings = raw.settings as Record<string, unknown> | undefined
+    raw.settings = { ...DEFAULT_SETTINGS, ...(settings && typeof settings === 'object' ? settings : {}) }
+    const records = Array.isArray(raw.records) ? raw.records : []
+    raw.records = records.map((item) => {
+      if (item && typeof item === 'object') {
+        const rec = item as Record<string, unknown>
+        if (typeof rec.processNameSnapshot === 'undefined') rec.processNameSnapshot = ''
+      }
+      return item
+    })
+    return raw
+  }
 }
 
 /** 把任意来源的原始文档沿迁移链升级到当前版本，并兜底补齐字段 */
@@ -216,8 +228,14 @@ export async function loadDoc(): Promise<DataDoc> {
 
 async function saveDocRaw(doc: DataDoc): Promise<void> {
   const payload = { ...doc, savedAt: Date.now() }
-  // 主存储写入 8s 超时兜底：悬挂时跳过本次落盘，按当前内存态继续（防主线程挂死）
-  await withTimeout(docStore.setItem(DOC_KEY, payload), IO_TIMEOUT_MS, () => undefined)
+  // 主存储写入 8s 超时兜底：超时抛错由调用方感知并提示，严禁静默跳过落盘导致"以为已保存实则丢失"
+  await withTimeout(
+    docStore.setItem(DOC_KEY, payload),
+    IO_TIMEOUT_MS,
+    () => {
+      throw new Error('主存储写入超时，数据可能未保存')
+    }
+  )
   // 原生端同步写文件镜像：与主存储互为备份，防止 WebView 存储被系统清理
   if (Capacitor.isNativePlatform()) {
     try {
@@ -232,7 +250,9 @@ async function saveDocRaw(doc: DataDoc): Promise<void> {
           })
         })(),
         IO_TIMEOUT_MS,
-        () => undefined
+        () => {
+          throw new Error('file mirror write timeout')
+        }
       )
     } catch (e) {
       console.warn('[db] 文件镜像写入失败（不影响主存储）', e)
@@ -295,4 +315,12 @@ export async function restoreBackup(pkg: BackupPackage): Promise<DataDoc> {
 
 export async function clearAllData(): Promise<void> {
   await docStore.removeItem(DOC_KEY)
+  // 同步删除文件镜像，防止「清空数据」后重启又从 Documents/jijian-data/jijian-doc.json 恢复旧数据
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await Filesystem.deleteFile({ path: `${FILE_DIR}/${FILE_NAME}`, directory: Directory.Documents })
+    } catch {
+      /* 镜像不存在或删除失败，不影响主流程 */
+    }
+  }
 }
