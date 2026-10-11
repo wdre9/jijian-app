@@ -27,7 +27,8 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host",
-    "type-check": "vue-tsc --noEmit"
+    "type-check": "vue-tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@capacitor-mlkit/text-recognition": "^8.2.1",
@@ -52,6 +53,7 @@
     "typescript": "~5.6.3",
     "vite": "^5.4.11",
     "vite-plugin-pwa": "^0.21.1",
+    "vitest": "^2.1.9",
     "vue-tsc": "^2.1.10"
   }
 }
