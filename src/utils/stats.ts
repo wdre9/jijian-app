@@ -74,7 +74,8 @@ function summarize(
     }
     row.quantity += Number(r.quantity) || 0
     row.amount += Number(r.amount) || 0
-    row.times += 1
+    // times 语义：手动模式表示「次数」，累加 count；自动模式表示「笔数」，累加 1（避免语义混淆）
+    row.times += r.countMode === 'manual' ? Number(r.count) || 0 : 1
   })
   return Array.from(map.values())
     .map((r) => ({ ...r, quantity: round(r.quantity, 2), amount: round(r.amount, 2) }))
@@ -213,6 +214,9 @@ export function avgPricePerPiece(records: PieceRecord[]): number {
  * - 自动模式：按该产品全部历史记录按创建时间排序后的序号（含本条）。
  * 无法确定时返回空串。
  */
+/** recordCountLabel 自动模式序号索引缓存：以 all 数组引用为键复用一次 O(N) 构建结果 */
+const autoCountIndexCache = new WeakMap<readonly PieceRecord[], Map<string, number>>()
+
 export function recordCountLabel(
   record: Pick<PieceRecord, 'id' | 'productId' | 'countMode' | 'count' | 'createdAt'>,
   all: PieceRecord[]
@@ -220,9 +224,15 @@ export function recordCountLabel(
   if (record.countMode === 'manual') {
     return record.count != null ? `第 ${record.count} 次` : ''
   }
-  const list = all
-    .filter((x) => x.productId === record.productId)
-    .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1))
-  const idx = list.findIndex((x) => x.id === record.id)
-  return idx >= 0 ? `第 ${idx + 1} 次` : ''
+  // 同一 all 引用只做一次 filter+sort，后续 O(1) 查序号（store 层 records 数组引用稳定）
+  let idxMap = autoCountIndexCache.get(all)
+  if (!idxMap) {
+    const list = all
+      .filter((x) => x.productId === record.productId)
+      .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    idxMap = new Map(list.map((x, i) => [x.id, i]))
+    autoCountIndexCache.set(all, idxMap)
+  }
+  const idx = idxMap.get(record.id)
+  return idx != null ? `第 ${idx + 1} 次` : ''
 }

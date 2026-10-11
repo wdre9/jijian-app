@@ -192,7 +192,8 @@ const rangeOptions = [
   { label: '本月', value: 'month' }
 ]
 
-const today = todayStr()
+// 跨午夜自动刷新：setup 时只算一次会在跨天后显示错误日期，改为 computed 按需重算
+const today = computed(() => todayStr())
 
 const greeting = computed(() => {
   const h = new Date().getHours()
@@ -203,12 +204,12 @@ const greeting = computed(() => {
   return '晚上好'
 })
 
-const dateLabel = computed(() => `${friendlyDate(today)} ${weekdayCn(today)}`)
+const dateLabel = computed(() => `${friendlyDate(today.value)} ${weekdayCn(today.value)}`)
 
 /* ------------------------- 时间范围数据 ------------------------- */
 const rangeRows = computed(() => {
-  if (range.value === 'today') return store.recordsOfDate(today)
-  if (range.value === 'week') return store.recordsInWeek(today)
+  if (range.value === 'today') return store.recordsOfDate(today.value)
+  if (range.value === 'week') return store.recordsInWeek(today.value)
   const { start, end } = currentMonthRange()
   return store.recordsInRange(start, end)
 })
@@ -233,8 +234,8 @@ const rangeLabel = computed(
 
 /* 今日 vs 昨日 */
 const delta = computed(() => {
-  const cur = sumAmount(store.recordsOfDate(today))
-  const prev = sumAmount(store.recordsOfDate(addDays(today, -1)))
+  const cur = sumAmount(store.recordsOfDate(today.value))
+  const prev = sumAmount(store.recordsOfDate(addDays(today.value, -1)))
   if (!prev && !cur) return null
   if (!prev) return { text: '昨日无记录', cls: 'delta--flat' }
   const rate = ((cur - prev) / prev) * 100
@@ -275,12 +276,12 @@ const todayRows = computed<RecordRow[]>(() =>
 /* ------------------------- 近 7 天 ------------------------- */
 const last7 = computed(() => {
   const groups = new Map<string, number>()
-  groupByDate(store.recordsInRange(addDays(today, -6), today)).forEach((g) => {
+  groupByDate(store.recordsInRange(addDays(today.value, -6), today.value)).forEach((g) => {
     groups.set(g.date, sumAmount(g.rows))
   })
   const out: Array<{ date: string; amount: number; weekLabel: string; label: string }> = []
   for (let i = 6; i >= 0; i--) {
-    const d = addDays(today, -i)
+    const d = addDays(today.value, -i)
     const date = new Date()
     date.setDate(date.getDate() - i)
     out.push({

@@ -514,7 +514,7 @@ async function exportCurrent() {
   }
   exporting.value = true
   try {
-    const sorted = [...rows.value].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const sorted = [...rows.value].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
     const res = await exportWorkbook(
       [{ name: '计件明细', aoa: detailAoa(sorted, specOf, (r) => recordCountLabel(r, store.records)) }],
       `计件明细_${filters.range}_${fileStamp()}.xlsx`

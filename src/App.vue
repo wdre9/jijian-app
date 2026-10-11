@@ -33,9 +33,10 @@ const showTab = computed(() => route.meta?.tab === true)
 /* ---------------- 主题 ---------------- */
 const media = window.matchMedia('(prefers-color-scheme: dark)')
 const systemDark = ref(media.matches)
-media.addEventListener('change', (e) => {
+const onMediaChange = (e: MediaQueryListEvent) => {
   systemDark.value = e.matches
-})
+}
+media.addEventListener('change', onMediaChange)
 
 const themeName = computed<'light' | 'dark'>(() => {
   const mode = store.settings.theme
@@ -60,8 +61,8 @@ function clearOverlay() {
 }
 
 function onVisibilityChange() {
-  // Android WebView 切后台再回前台时，清理可能残留的弹窗遮罩
-  if (document.visibilityState === 'visible') {
+  // 仅页面进入 hidden（切后台/锁屏）时清理可能残留的弹窗遮罩，回前台不清理
+  if (document.visibilityState === 'hidden') {
     clearOverlay()
   }
 }
@@ -73,6 +74,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  media.removeEventListener('change', onMediaChange)
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
