@@ -11,7 +11,10 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // 不在 index.html 自动注入 registerSW.js，改由 main.ts 条件注册：
+      // 原生端（Capacitor）不需要 PWA，注册旧 SW 会在覆盖安装后首次启动加载
+      // 旧缓存导致首帧点击失灵（v1.2.5 覆盖安装点不动根因之一）
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: '计件工资记账',

@@ -1,7 +1,7 @@
 {
   "name": "jijian-wage-pwa",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.2.8",
   "type": "module",
   "description": "计件工资记账 · 移动端 PWA（本地离线、无需登录）",
   "license": "MIT",

@@ -54,7 +54,7 @@
         <button class="icon-btn" type="button" @click="toggleSelect">
           <van-icon :name="selectMode ? 'cross' : 'checked'" size="17" />
         </button>
-        <button class="icon-btn" type="button" @click="exportCurrent">
+        <button class="icon-btn" type="button" :disabled="exporting" @click="exportCurrent">
           <van-icon name="down" size="17" />
         </button>
       </div>
@@ -92,8 +92,8 @@
       <div class="select-bar__info">已选 {{ selected.length }} 条</div>
       <div class="select-bar__actions">
         <van-button size="small" round plain @click="selectAll">全选</van-button>
-        <van-button size="small" round plain @click="exportSelected">导出</van-button>
-        <van-button size="small" round type="danger" :disabled="!selected.length" @click="batchDelete">
+        <van-button size="small" round plain :loading="exporting" :disabled="exporting" @click="exportSelected">导出</van-button>
+        <van-button size="small" round type="danger" :disabled="!selected.length || deleting" :loading="deleting" @click="batchDelete">
           删除
         </van-button>
       </div>
@@ -130,6 +130,17 @@
 
           <div class="field">
             <div class="field__label">产品</div>
+            <div class="kw-wrap">
+              <van-icon name="search" size="14" color="var(--app-text-3)" />
+              <input v-model="filterProductKw" class="kw-input" placeholder="搜索产品名称 / 规格" />
+              <van-icon
+                v-if="filterProductKw"
+                name="clear"
+                size="14"
+                color="var(--app-text-3)"
+                @click="filterProductKw = ''"
+              />
+            </div>
             <div class="chips">
               <button
                 type="button"
@@ -139,21 +150,35 @@
               >
                 全部
               </button>
-              <button
-                v-for="p in store.products"
-                :key="p.id"
-                type="button"
-                class="chip"
-                :class="{ 'is-active': filters.productId === p.id }"
-                @click="setProduct(p.id)"
-              >
-                {{ p.name }}
-              </button>
+              <template v-if="filteredProducts.length">
+                <button
+                  v-for="p in filteredProducts"
+                  :key="p.id"
+                  type="button"
+                  class="chip"
+                  :class="{ 'is-active': filters.productId === p.id }"
+                  @click="setProduct(p.id)"
+                >
+                  {{ p.name }}
+                </button>
+              </template>
+              <div v-else class="no-match">无匹配项</div>
             </div>
           </div>
 
           <div v-if="processOptions.length" class="field">
             <div class="field__label">工序</div>
+            <div class="kw-wrap">
+              <van-icon name="search" size="14" color="var(--app-text-3)" />
+              <input v-model="filterProcessKw" class="kw-input" placeholder="搜索工序" />
+              <van-icon
+                v-if="filterProcessKw"
+                name="clear"
+                size="14"
+                color="var(--app-text-3)"
+                @click="filterProcessKw = ''"
+              />
+            </div>
             <div class="chips">
               <button
                 type="button"
@@ -163,21 +188,35 @@
               >
                 全部
               </button>
-              <button
-                v-for="o in processOptions"
-                :key="o.id"
-                type="button"
-                class="chip"
-                :class="{ 'is-active': filters.processId === o.id }"
-                @click="filters.processId = o.id"
-              >
-                {{ o.name }}
-              </button>
+              <template v-if="filteredProcesses.length">
+                <button
+                  v-for="o in filteredProcesses"
+                  :key="o.id"
+                  type="button"
+                  class="chip"
+                  :class="{ 'is-active': filters.processId === o.id }"
+                  @click="filters.processId = o.id"
+                >
+                  {{ o.name }}
+                </button>
+              </template>
+              <div v-else class="no-match">无匹配项</div>
             </div>
           </div>
 
           <div class="field">
             <div class="field__label">工人</div>
+            <div class="kw-wrap">
+              <van-icon name="search" size="14" color="var(--app-text-3)" />
+              <input v-model="filterWorkerKw" class="kw-input" placeholder="搜索工人" />
+              <van-icon
+                v-if="filterWorkerKw"
+                name="clear"
+                size="14"
+                color="var(--app-text-3)"
+                @click="filterWorkerKw = ''"
+              />
+            </div>
             <div class="chips">
               <button
                 type="button"
@@ -187,16 +226,19 @@
               >
                 全部
               </button>
-              <button
-                v-for="w in store.workerOptions"
-                :key="w"
-                type="button"
-                class="chip"
-                :class="{ 'is-active': filters.worker === w }"
-                @click="filters.worker = w"
-              >
-                {{ w }}
-              </button>
+              <template v-if="filteredWorkers.length">
+                <button
+                  v-for="w in filteredWorkers"
+                  :key="w"
+                  type="button"
+                  class="chip"
+                  :class="{ 'is-active': filters.worker === w }"
+                  @click="filters.worker = w"
+                >
+                  {{ w }}
+                </button>
+              </template>
+              <div v-else class="no-match">无匹配项</div>
             </div>
           </div>
 
@@ -216,8 +258,10 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-import { showConfirmDialog, showToast } from 'vant'
+import { showToast } from 'vant'
 import { useAppStore } from '@/stores/app'
+import { confirmAction } from '@/utils/dialog'
+import { runGuarded } from '@/utils/async'
 import type { RecordRow } from '@/types'
 import { money, qty, round } from '@/utils/format'
 import {
@@ -285,6 +329,32 @@ const hasAnyRecord = computed(() => store.records.length > 0)
 const processOptions = computed(() =>
   filters.productId ? store.processesOfProduct(filters.productId) : []
 )
+
+const filterProductKw = ref('')
+const filterProcessKw = ref('')
+const filterWorkerKw = ref('')
+
+const filteredProducts = computed(() => {
+  const kw = filterProductKw.value.trim().toLowerCase()
+  if (!kw) return store.products
+  return store.products.filter(
+    (p) =>
+      p.name.toLowerCase().includes(kw) ||
+      (p.spec || '').toLowerCase().includes(kw)
+  )
+})
+
+const filteredProcesses = computed(() => {
+  const kw = filterProcessKw.value.trim().toLowerCase()
+  if (!kw) return processOptions.value
+  return processOptions.value.filter((o) => o.name.toLowerCase().includes(kw))
+})
+
+const filteredWorkers = computed(() => {
+  const kw = filterWorkerKw.value.trim().toLowerCase()
+  if (!kw) return store.workerOptions
+  return store.workerOptions.filter((w) => w.toLowerCase().includes(kw))
+})
 
 const activeFilterCount = computed(() => {
   let n = 0
@@ -410,23 +480,25 @@ function selectAll() {
   selected.value = rows.value.map((r) => r.id)
 }
 
+const deleting = ref(false)
+const exporting = ref(false)
+
 async function batchDelete() {
   if (!selected.value.length) return
   const n = selected.value.length
-  try {
-    await showConfirmDialog({
-      title: '删除记录',
-      message: `确认删除已选中的 ${n} 条记录？删除后不可恢复。`,
-      confirmButtonText: '删除',
-      confirmButtonColor: '#EF4444'
-    })
-  } catch {
-    return
-  }
-  await store.removeRecords([...selected.value])
-  selected.value = []
-  selectMode.value = false
-  showToast(`已删除 ${n} 条记录`)
+  const ok = await confirmAction({
+    title: '删除记录',
+    message: `确认删除已选中的 ${n} 条记录？删除后不可恢复。`,
+    confirmButtonText: '删除',
+    confirmButtonColor: '#EF4444'
+  })
+  if (!ok) return
+  await runGuarded(deleting, async () => {
+    await store.removeRecords([...selected.value])
+    selected.value = []
+    selectMode.value = false
+    showToast(`已删除 ${n} 条记录`)
+  }, { label: '删除' })
 }
 
 /* --------------------------- 导出 --------------------------- */
@@ -434,31 +506,53 @@ function specOf(productId: string): string {
   return store.productMap.get(productId)?.spec || ''
 }
 
-function exportCurrent() {
+async function exportCurrent() {
+  if (exporting.value) return
   if (!rows.value.length) {
     showToast('当前没有可导出的记录')
     return
   }
-  const sorted = [...rows.value].sort((a, b) => (a.date < b.date ? -1 : 1))
-  exportWorkbook(
-    [{ name: '计件明细', aoa: detailAoa(sorted, specOf) }],
-    `计件明细_${filters.range}_${fileStamp()}.xlsx`
-  )
-  showToast(`已导出 ${rows.value.length} 条记录`)
+  exporting.value = true
+  try {
+    const sorted = [...rows.value].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const res = await exportWorkbook(
+      [{ name: '计件明细', aoa: detailAoa(sorted, specOf) }],
+      `计件明细_${filters.range}_${fileStamp()}.xlsx`
+    )
+    showToast({
+      type: 'success',
+      message: res.mode === 'native' ? `已导出 ${rows.value.length} 条记录，已保存至 ${res.display}` : `已导出 ${rows.value.length} 条记录`
+    })
+  } catch (err) {
+    showToast({ type: 'fail', message: `导出失败：${err instanceof Error ? err.message : String(err)}` })
+  } finally {
+    exporting.value = false
+  }
 }
 
-function exportSelected() {
+async function exportSelected() {
+  if (exporting.value) return
   if (!selected.value.length) {
     showToast('请先选择记录')
     return
   }
-  const set = new Set(selected.value)
-  const list = rows.value.filter((r) => set.has(r.id)).sort((a, b) => (a.date < b.date ? -1 : 1))
-  exportWorkbook(
-    [{ name: '选中明细', aoa: detailAoa(list, specOf) }],
-    `选中计件明细_${fileStamp()}.xlsx`
-  )
-  showToast(`已导出 ${list.length} 条记录`)
+  exporting.value = true
+  try {
+    const set = new Set(selected.value)
+    const list = rows.value.filter((r) => set.has(r.id)).sort((a, b) => (a.date < b.date ? -1 : 1))
+    const res = await exportWorkbook(
+      [{ name: '选中明细', aoa: detailAoa(list, specOf) }],
+      `选中计件明细_${fileStamp()}.xlsx`
+    )
+    showToast({
+      type: 'success',
+      message: res.mode === 'native' ? `已导出 ${list.length} 条记录，已保存至 ${res.display}` : `已导出 ${list.length} 条记录`
+    })
+  } catch (err) {
+    showToast({ type: 'fail', message: `导出失败：${err instanceof Error ? err.message : String(err)}` })
+  } finally {
+    exporting.value = false
+  }
 }
 </script>
 
@@ -696,5 +790,39 @@ function exportSelected() {
   background: var(--app-primary-weak);
   color: var(--app-primary);
   font-weight: 600;
+}
+
+.kw-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px;
+  padding: 0 10px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--app-card-2);
+}
+
+.kw-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--app-text);
+  font-family: inherit;
+  outline: none;
+}
+
+.kw-input::placeholder {
+  color: var(--app-text-3);
+}
+
+.no-match {
+  width: 100%;
+  font-size: 12px;
+  color: var(--app-text-3);
+  text-align: center;
+  padding: 6px 0;
 }
 </style>

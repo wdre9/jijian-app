@@ -5,6 +5,35 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.8] - 2026-10-11
+
+### 修复
+
+- **导出提示空白不可见**：全局样式 `.van-popup { background: var(--app-card) }` 误伤 Vant Toast
+  （Toast 同为 `.van-popup`，被刷成白底后白字隐形，浅色主题必现、深色主题正常），
+  导致导出成功/失败、保存路径与权限引导等全部提示肉眼不可见——表现为"点导出只弹一个空白框"。
+  修正为 `.van-popup:not(.van-toast)`，Toast 恢复黑底白字。
+- **导出文件在 Android 11+ 上不进公共「文档」**：分区存储下 Capacitor Filesystem 直写公共
+  Documents/Downloads 必须有「所有文件访问权限」，降级链最终落到文件管理器不可见的应用
+  私有目录，导出"假成功"。新增本地原生插件 `MediaStoreSaverPlugin`（MediaStore API，
+  Android 10+ 免任何权限直写 文档/jijian-exports，文件管理器立即可见），`saveBlob`
+  原生端优先走 MediaStore，失败自动回落原 Filesystem 降级链；降级链兜底目录由
+  内部私有目录改为应用外部目录（/Android/data/包名/files，部分文件管理器可见）。
+- **自动备份从未真正落盘**：自动备份直写 `Directory.Documents` 且无降级，Android 11+ 上
+  每次都被权限拒绝后静默吞掉。改为同样优先走 MediaStore（文档/计件自动备份/，
+  滚动保留最近 14 份由原生插件 pruneDir 完成），失败回落原 Filesystem 路径。
+
+### 变更
+
+- 版本号升级至 1.2.8（versionCode 9）。
+
+### 说明
+
+- 修复全部经平台开关（`canUseMediaStore()`）限定在 Android 原生端生效，
+  Web / PWA 与其他平台（含规划中的鸿蒙版）导出路径与行为完全不变。
+- 仅新增 2 个文件（MediaStoreSaverPlugin.java、utils/mediastore.ts），
+  其余为就地修改，项目结构与既有架构未做任何调整。
+
 ## [1.2.2] - 2026-10-10
 
 ### 变更

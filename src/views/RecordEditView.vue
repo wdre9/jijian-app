@@ -54,9 +54,20 @@
           clearable
           @update:model-value="(v: string) => (form.worker = v)"
         />
+        <div v-if="store.workerOptions.length" class="kw-wrap">
+          <van-icon name="search" size="14" color="var(--app-text-3)" />
+          <input v-model="workerKw" class="kw-input" placeholder="搜索工人" />
+          <van-icon
+            v-if="workerKw"
+            name="clear"
+            size="14"
+            color="var(--app-text-3)"
+            @click="workerKw = ''"
+          />
+        </div>
         <div v-if="store.workerOptions.length" class="chips">
           <span
-            v-for="w in store.workerOptions"
+            v-for="w in filteredWorkers"
             :key="w"
             class="chip"
             :class="{ 'is-on': form.worker === w }"
@@ -64,6 +75,7 @@
           >
             {{ w }}
           </span>
+          <div v-if="!filteredWorkers.length" class="no-match">无匹配项</div>
         </div>
         <van-field label="班次">
           <template #input>
@@ -114,35 +126,38 @@
     />
 
     <!-- 产品选择 -->
-    <van-popup v-model:show="showProduct" position="bottom" round>
-      <van-picker
-        title="选择产品"
-        :columns="productColumns"
-        @confirm="onPickProduct"
-        @cancel="showProduct = false"
-      />
-    </van-popup>
+    <SearchPickerSheet
+      v-model:show="showProduct"
+      title="选择产品"
+      :options="productOptions"
+      :selected="form.productId"
+      @confirm="onPickProduct"
+      @cancel="showProduct = false"
+    />
 
     <!-- 工序选择 -->
-    <van-popup v-model:show="showProcess" position="bottom" round>
-      <van-picker
-        title="选择工序"
-        :columns="processColumns"
-        @confirm="onPickProcess"
-        @cancel="showProcess = false"
-      />
-    </van-popup>
+    <SearchPickerSheet
+      v-model:show="showProcess"
+      title="选择工序"
+      :options="processOptions"
+      :selected="form.processId"
+      @confirm="onPickProcess"
+      @cancel="showProcess = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showToast } from 'vant'
 import { useAppStore } from '@/stores/app'
+import { confirmAction } from '@/utils/dialog'
+import { runGuarded } from '@/utils/async'
 import type { Shift } from '@/types'
 import { money, priceText, round, toNum } from '@/utils/format'
 import { addDays, parseDate, todayStr, weekdayCn, friendlyDate } from '@/utils/date'
+import SearchPickerSheet from '@/components/SearchPickerSheet.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -180,15 +195,22 @@ const amountText = computed(
   () => `¥${money(round((toNum(qtyStr.value) || 0) * (toNum(priceStr.value) || 0), 2))}`
 )
 
-const productColumns = computed(() =>
-  store.products.map((p) => ({ text: p.spec ? `${p.name}（${p.spec}）` : p.name, value: p.id }))
+const productOptions = computed(() =>
+  store.products.map((p) => ({ text: p.name, value: p.id, sub: p.spec || '' }))
 )
 
-const processColumns = computed(() =>
+const processOptions = computed(() =>
   store
     .processesOfProduct(form.productId)
-    .map((o) => ({ text: `${o.name}　¥${priceText(o.price)}/件`, value: o.id }))
+    .map((o) => ({ text: o.name, value: o.id, sub: `¥${priceText(o.price)}/件` }))
 )
+
+const workerKw = ref('')
+const filteredWorkers = computed(() => {
+  const kw = workerKw.value.trim().toLowerCase()
+  if (!kw) return store.workerOptions
+  return store.workerOptions.filter((w) => w.toLowerCase().includes(kw))
+})
 
 onMounted(() => {
   if (!store.ready) store.init()
@@ -258,8 +280,7 @@ function openProcessPicker() {
   showProcess.value = true
 }
 
-function onPickProduct({ selectedOptions }: { selectedOptions: Array<{ value: string }> }) {
-  const id = selectedOptions?.[0]?.value || ''
+function onPickProduct(id: string) {
   if (id !== form.productId) {
     form.productId = id
     form.processId = ''
@@ -268,8 +289,7 @@ function onPickProduct({ selectedOptions }: { selectedOptions: Array<{ value: st
   showProduct.value = false
 }
 
-function onPickProcess({ selectedOptions }: { selectedOptions: Array<{ value: string }> }) {
-  const id = selectedOptions?.[0]?.value || ''
+function onPickProcess(id: string) {
   form.processId = id
   const proc = store.processMap.get(id)
   if (proc) priceStr.value = String(proc.price)
@@ -277,51 +297,47 @@ function onPickProcess({ selectedOptions }: { selectedOptions: Array<{ value: st
 }
 
 async function save() {
-  if (saving.value) return
   if (!form.productId) return showToast('请选择产品')
   if (!form.processId) return showToast('请选择工序')
   const quantity = round(toNum(qtyStr.value), 2)
   const price = round(toNum(priceStr.value), 4)
   if (!(quantity > 0)) return showToast('数量需大于 0')
 
-  saving.value = true
   try {
-    const payload = {
-      date: form.date,
-      productId: form.productId,
-      processId: form.processId,
-      quantity,
-      price,
-      worker: form.worker.trim(),
-      shift: form.shift,
-      note: form.note.trim()
-    }
-    if (isEdit.value) {
-      await store.updateRecord(editId.value, payload)
-      showToast('已保存')
-    } else {
-      await store.addRecord(payload)
-      showToast('记账成功')
-    }
-    router.back()
+    await runGuarded(saving, async () => {
+      const payload = {
+        date: form.date,
+        productId: form.productId,
+        processId: form.processId,
+        quantity,
+        price,
+        worker: form.worker.trim(),
+        shift: form.shift,
+        note: form.note.trim()
+      }
+      if (isEdit.value) {
+        await store.updateRecord(editId.value, payload)
+        showToast('已保存')
+      } else {
+        await store.addRecord(payload)
+        showToast('记账成功')
+      }
+      router.back()
+    }, { label: '保存' })
   } catch (e) {
     showToast('保存失败，请重试')
-  } finally {
-    saving.value = false
   }
 }
 
-function onDelete() {
-  showConfirmDialog({
+async function onDelete() {
+  const ok = await confirmAction({
     title: '删除记录',
     message: '确定删除这条计件记录吗？删除后可在「数据与导出」中通过备份恢复。'
   })
-    .then(async () => {
-      await store.removeRecord(editId.value)
-      showToast('已删除')
-      router.replace('/records')
-    })
-    .catch(() => {})
+  if (!ok) return
+  await store.removeRecord(editId.value)
+  showToast('已删除')
+  router.replace('/records')
 }
 </script>
 
@@ -355,6 +371,40 @@ function onDelete() {
   border-color: var(--app-primary);
   color: var(--app-primary);
   font-weight: 600;
+}
+
+.kw-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 16px 2px;
+  padding: 0 10px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--app-card-2);
+}
+
+.kw-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--app-text);
+  font-family: inherit;
+  outline: none;
+}
+
+.kw-input::placeholder {
+  color: var(--app-text-3);
+}
+
+.no-match {
+  width: 100%;
+  font-size: 12px;
+  color: var(--app-text-3);
+  text-align: center;
+  padding: 6px 0;
 }
 
 .fs-12 {

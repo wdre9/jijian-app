@@ -10,14 +10,17 @@
     />
 
     <div class="page__inner pb-88">
-      <!-- 导入成功结果卡：明确反馈，避免空白页误导重复提交 -->
-      <div v-if="lastImport" class="card card--success">
+      <!-- 导入结果卡：成功/部分失败均明确反馈，避免空白页误导重复提交 -->
+      <div v-if="lastImport" class="card" :class="lastImport.failed.length ? 'card--warn' : 'card--success'">
         <div class="card__head">
-          <div class="card__title">导入成功</div>
-          <van-tag round plain type="success">已完成</van-tag>
+          <div class="card__title">{{ lastImport.failed.length ? '导入完成（部分失败）' : '导入成功' }}</div>
+          <van-tag round plain :type="lastImport.failed.length ? 'warning' : 'success'">{{ lastImport.failed.length ? '部分失败' : '已完成' }}</van-tag>
         </div>
         <div class="fs-13">
           已导入 <b>{{ lastImport.count }}</b> 条记录（{{ lastImport.time }}），可在「明细」页查看。
+        </div>
+        <div v-if="lastImport.failed.length" class="fs-12 text-3 lh-18 mt-8">
+          失败 {{ lastImport.failed.length }} 条：{{ lastImport.failed.map((f) => `${f.row}（${f.reason}）`).join('；') }}
         </div>
       </div>
 
@@ -216,8 +219,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { showConfirmDialog, showSuccessToast, showFailToast } from 'vant'
+import { showFailToast } from 'vant'
 import type { UploaderFileListItem } from 'vant'
+import { alertAction, confirmAction } from '@/utils/dialog'
 import { useAppStore } from '@/stores/app'
 import { money, round, toNum } from '@/utils/format'
 import {
@@ -243,7 +247,7 @@ const skippedCount = ref(0)
 const unparsed = ref<string[]>([])
 const parsed = ref(false)
 const importing = ref(false)
-const lastImport = ref<{ count: number; time: string } | null>(null)
+const lastImport = ref<{ count: number; failed: Array<{ row: string; reason: string }>; time: string } | null>(null)
 
 const defaultWorker = computed(() => store.settings.defaultWorker || '')
 
@@ -353,7 +357,7 @@ async function confirmImport() {
 
   importing.value = true
   try {
-    await showConfirmDialog({
+    const confirmed = await confirmAction({
       title: '确认导入',
       message:
         `将导入 ${rows.length} 条记录，合计 ¥${money(totalAmount.value)}。\n` +
@@ -361,42 +365,43 @@ async function confirmImport() {
       confirmButtonText: '导入',
       cancelButtonText: '取消'
     })
-  } catch {
-    importing.value = false
-    return
-  }
+    if (!confirmed) return
 
-  try {
     if (!store.ready) await store.init()
-    for (const row of rows) {
-      const code = row.productCode.trim()
-      let product = store.products.find((p) => p.name === code)
-      if (!product) {
-        product = await store.addProduct({ name: code })
-      }
-      const pname = row.processName.trim() || '未分类'
-      let process = store.processes.find((o) => o.productId === product.id && o.name === pname)
-      if (!process) {
-        process = await store.addProcess({ productId: product.id, name: pname, price: row.price })
-      }
-      await store.addRecord({
+    const res = await store.bulkImport(
+      rows.map((row) => ({
         date: row.date.trim(),
-        productId: product.id,
-        processId: process.id,
+        productName: row.productCode.trim(),
+        processName: row.processName.trim() || '未分类',
         quantity: row.quantity,
         price: row.price,
         worker: row.worker.trim(),
         shift: row.shift || 'day',
         note: row.note,
-        amount: row.amount
-      })
-    }
+        amount: row.amount,
+        raw: row.raw
+      }))
+    )
     const now = new Date()
     lastImport.value = {
-      count: rows.length,
+      count: res.ok,
+      failed: res.failed,
       time: `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`
     }
-    showSuccessToast(`导入成功：${rows.length} 条记录`)
+    if (res.failed.length) {
+      showFailToast(`导入完成：成功 ${res.ok} 条，失败 ${res.failed.length} 条`)
+      await alertAction({
+        title: `导入完成：成功 ${res.ok} 条，失败 ${res.failed.length} 条`,
+        message: res.failed.map((f) => `${f.row}（${f.reason}）`).join('\n'),
+        confirmButtonText: '知道了'
+      })
+    } else {
+      await alertAction({
+        title: '导入成功',
+        message: `已成功导入 ${res.ok} 条记录，可在「明细」页查看。`,
+        confirmButtonText: '知道了'
+      })
+    }
     resetState()
   } catch (e) {
     showFailToast(`导入失败：${e instanceof Error ? e.message : String(e)}`)
@@ -422,6 +427,15 @@ function resetState() {
 .card--success {
   border-color: var(--van-success-color, #07c160);
   background: rgba(7, 193, 96, 0.06);
+}
+
+.card--warn {
+  border-color: var(--van-warning-color, #ff976a);
+  background: rgba(255, 151, 106, 0.06);
+}
+
+.mt-8 {
+  margin-top: 8px;
 }
 
 .lh-18 {

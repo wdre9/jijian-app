@@ -17,18 +17,32 @@
         <!-- 产品 -->
         <div v-if="products.length" class="field">
           <div class="field__label">产品</div>
+          <div class="kw-wrap">
+            <van-icon name="search" size="14" color="var(--app-text-3)" />
+            <input v-model="productKw" class="kw-input" placeholder="搜索产品名称 / 规格" />
+            <van-icon
+              v-if="productKw"
+              name="clear"
+              size="14"
+              color="var(--app-text-3)"
+              @click="productKw = ''"
+            />
+          </div>
           <div class="chips">
-            <button
-              v-for="p in products"
-              :key="p.id"
-              type="button"
-              class="chip"
-              :class="{ 'is-active': p.id === form.productId }"
-              @click="pickProduct(p.id)"
-            >
-              {{ p.name }}
-              <em v-if="p.spec">{{ p.spec }}</em>
-            </button>
+            <template v-if="filteredProducts.length">
+              <button
+                v-for="p in filteredProducts"
+                :key="p.id"
+                type="button"
+                class="chip"
+                :class="{ 'is-active': p.id === form.productId }"
+                @click="pickProduct(p.id)"
+              >
+                {{ p.name }}
+                <em v-if="p.spec">{{ p.spec }}</em>
+              </button>
+            </template>
+            <div v-else class="hint-line">无匹配项</div>
           </div>
         </div>
         <van-empty v-else image-size="70" description="还没有产品，先去「产品与工序」添加" />
@@ -36,18 +50,32 @@
         <!-- 工序 -->
         <div v-if="form.productId" class="field">
           <div class="field__label">工序（点选自动带出单价）</div>
+          <div v-if="currentProcesses.length" class="kw-wrap">
+            <van-icon name="search" size="14" color="var(--app-text-3)" />
+            <input v-model="processKw" class="kw-input" placeholder="搜索工序" />
+            <van-icon
+              v-if="processKw"
+              name="clear"
+              size="14"
+              color="var(--app-text-3)"
+              @click="processKw = ''"
+            />
+          </div>
           <div v-if="currentProcesses.length" class="chips chips--grid">
-            <button
-              v-for="o in currentProcesses"
-              :key="o.id"
-              type="button"
-              class="chip chip--process"
-              :class="{ 'is-active': o.id === form.processId }"
-              @click="pickProcess(o.id)"
-            >
-              <span class="chip__name ellipsis">{{ o.name }}</span>
-              <span class="chip__price num">¥{{ priceText(o.price) }}</span>
-            </button>
+            <template v-if="filteredProcesses.length">
+              <button
+                v-for="o in filteredProcesses"
+                :key="o.id"
+                type="button"
+                class="chip chip--process"
+                :class="{ 'is-active': o.id === form.processId }"
+                @click="pickProcess(o.id)"
+              >
+                <span class="chip__name ellipsis">{{ o.name }}</span>
+                <span class="chip__price num">¥{{ priceText(o.price) }}</span>
+              </button>
+            </template>
+            <div v-else class="hint-line no-match">无匹配项</div>
           </div>
           <div v-else class="hint-line">该产品暂无工序，请先在「产品与工序」中添加</div>
         </div>
@@ -101,17 +129,31 @@
           <div class="row" style="gap: 8px">
             <input class="text-input" v-model="form.worker" placeholder="填写姓名" />
           </div>
+          <div v-if="workerOptions.length" class="kw-wrap" style="margin-top: 8px">
+            <van-icon name="search" size="14" color="var(--app-text-3)" />
+            <input v-model="workerKw" class="kw-input" placeholder="搜索工人" />
+            <van-icon
+              v-if="workerKw"
+              name="clear"
+              size="14"
+              color="var(--app-text-3)"
+              @click="workerKw = ''"
+            />
+          </div>
           <div v-if="workerOptions.length" class="chips" style="margin-top: 8px">
-            <button
-              v-for="w in workerOptions"
-              :key="w"
-              type="button"
-              class="chip chip--sm"
-              :class="{ 'is-active': w === form.worker }"
-              @click="form.worker = w"
-            >
-              {{ w }}
-            </button>
+            <template v-if="filteredWorkers.length">
+              <button
+                v-for="w in filteredWorkers"
+                :key="w"
+                type="button"
+                class="chip chip--sm"
+                :class="{ 'is-active': w === form.worker }"
+                @click="form.worker = w"
+              >
+                {{ w }}
+              </button>
+            </template>
+            <div v-else class="hint-line no-match">无匹配项</div>
           </div>
         </div>
 
@@ -132,12 +174,13 @@
             class="btn-continue"
             type="default"
             round
-            :disabled="!canSave"
+            :disabled="!canSave || saving"
+            :loading="saving"
             @click="save(true)"
           >
             保存并再记一笔
           </van-button>
-          <van-button class="btn-save" type="primary" round :disabled="!canSave" @click="save(false)">
+          <van-button class="btn-save" type="primary" round :disabled="!canSave || saving" :loading="saving" @click="save(false)">
             保存
           </van-button>
         </div>
@@ -150,6 +193,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { showToast } from 'vant'
 import { useAppStore } from '@/stores/app'
+import { runGuarded } from '@/utils/async'
 import { money, priceText, round, toNum } from '@/utils/format'
 import { todayStr } from '@/utils/date'
 import DatePickButton from '@/components/DatePickButton.vue'
@@ -191,6 +235,32 @@ const products = computed(() =>
 )
 const currentProcesses = computed(() => store.processesOfProduct(form.productId))
 const workerOptions = computed(() => store.workerOptions)
+
+const productKw = ref('')
+const processKw = ref('')
+const workerKw = ref('')
+
+const filteredProducts = computed(() => {
+  const kw = productKw.value.trim().toLowerCase()
+  if (!kw) return products.value
+  return products.value.filter(
+    (p) =>
+      p.name.toLowerCase().includes(kw) ||
+      (p.spec || '').toLowerCase().includes(kw)
+  )
+})
+
+const filteredProcesses = computed(() => {
+  const kw = processKw.value.trim().toLowerCase()
+  if (!kw) return currentProcesses.value
+  return currentProcesses.value.filter((o) => o.name.toLowerCase().includes(kw))
+})
+
+const filteredWorkers = computed(() => {
+  const kw = workerKw.value.trim().toLowerCase()
+  if (!kw) return workerOptions.value
+  return workerOptions.value.filter((w) => w.toLowerCase().includes(kw))
+})
 const amount = computed(() => round(toNum(form.quantity) * toNum(form.price), 2))
 const canSave = computed(
   () => !!form.productId && !!form.processId && toNum(form.quantity) > 0
@@ -278,6 +348,8 @@ function normalizePrice() {
   priceInput.value = String(form.price)
 }
 
+const saving = ref(false)
+
 async function save(again: boolean) {
   normalizeQty()
   normalizePrice()
@@ -285,25 +357,27 @@ async function save(again: boolean) {
     showToast('请选择产品与工序，并填写数量')
     return
   }
-  await store.addRecord({
-    date: form.date,
-    productId: form.productId,
-    processId: form.processId,
-    quantity: form.quantity,
-    price: form.price,
-    worker: form.worker.trim(),
-    shift: form.shift,
-    note: form.note.trim()
-  })
-  emit('saved')
-  if (again) {
-    showToast('已保存，继续记下一笔')
-    form.quantity = 0
-    form.note = ''
-  } else {
-    showToast('已保存')
-    emit('update:show', false)
-  }
+  await runGuarded(saving, async () => {
+    await store.addRecord({
+      date: form.date,
+      productId: form.productId,
+      processId: form.processId,
+      quantity: form.quantity,
+      price: form.price,
+      worker: form.worker.trim(),
+      shift: form.shift,
+      note: form.note.trim()
+    })
+    emit('saved')
+    if (again) {
+      showToast('已保存，继续记下一笔')
+      form.quantity = 0
+      form.note = ''
+    } else {
+      showToast('已保存')
+      emit('update:show', false)
+    }
+  }, { label: '保存' })
 }
 
 function close() {
@@ -502,6 +576,37 @@ if (props.show) reset()
   font-size: 12px;
   color: var(--app-text-3);
   padding: 6px 0;
+}
+
+.kw-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px;
+  padding: 0 10px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--app-card-2);
+}
+
+.kw-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--app-text);
+  font-family: inherit;
+  outline: none;
+}
+
+.kw-input::placeholder {
+  color: var(--app-text-3);
+}
+
+.no-match {
+  width: 100%;
+  text-align: center;
 }
 
 .sheet__foot {

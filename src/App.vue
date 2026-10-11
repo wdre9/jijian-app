@@ -17,8 +17,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watchEffect } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
 import { useRoute } from 'vue-router'
+import { closeDialog, closeToast } from 'vant'
 import { useAppStore } from '@/stores/app'
 import AppTabBar from '@/components/AppTabBar.vue'
 import InstallGuideSheet from '@/components/InstallGuideSheet.vue'
@@ -51,9 +52,28 @@ watchEffect(() => {
   if (meta) meta.setAttribute('content', dark ? '#0f141b' : '#3B82F6')
 })
 
+/* ---------------- 弹窗遮罩兜底清理 ---------------- */
+/** 强制关闭命令式 Dialog / Toast，避免 overlay 残留拦截整屏点击 */
+function clearOverlay() {
+  closeDialog()
+  closeToast()
+}
+
+function onVisibilityChange() {
+  // Android WebView 切后台再回前台时，清理可能残留的弹窗遮罩
+  if (document.visibilityState === 'visible') {
+    clearOverlay()
+  }
+}
+
 onMounted(() => {
   initInstall()
   store.init()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 

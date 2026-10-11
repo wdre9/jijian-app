@@ -47,7 +47,7 @@
           <van-button class="del" block round plain type="danger" @click="onDelete">
             删除记录
           </van-button>
-          <van-button class="again" block round plain @click="addAgain">
+          <van-button class="again" block round plain :loading="adding" :disabled="adding" @click="addAgain">
             再记一笔（同产品·工序）
           </van-button>
         </div>
@@ -59,10 +59,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showToast } from 'vant'
 import { useAppStore } from '@/stores/app'
+import { confirmAction } from '@/utils/dialog'
+import { runGuarded } from '@/utils/async'
 import { money, priceText, qty, round } from '@/utils/format'
 import { formatDateTime, friendlyDate, todayStr, weekdayCn } from '@/utils/date'
 import EmptyState from '@/components/EmptyState.vue'
@@ -88,33 +90,35 @@ onMounted(() => {
   if (!store.ready) store.init()
 })
 
+const adding = ref(false)
+
 async function addAgain() {
   const r = row.value
   if (!r) return
-  await store.addRecord({
-    date: todayStr(),
-    productId: r.productId,
-    processId: r.processId,
-    quantity: r.quantity,
-    price: round(store.processMap.get(r.processId)?.price || r.price, 4),
-    worker: r.worker,
-    shift: r.shift,
-    note: ''
-  })
-  showToast('已按同样数量再记一笔')
+  await runGuarded(adding, async () => {
+    await store.addRecord({
+      date: todayStr(),
+      productId: r.productId,
+      processId: r.processId,
+      quantity: r.quantity,
+      price: round(store.processMap.get(r.processId)?.price || r.price, 4),
+      worker: r.worker,
+      shift: r.shift,
+      note: ''
+    })
+    showToast('已按同样数量再记一笔')
+  }, { label: '操作' })
 }
 
-function onDelete() {
-  showConfirmDialog({
+async function onDelete() {
+  const ok = await confirmAction({
     title: '删除记录',
     message: '确定删除这条计件记录吗？'
   })
-    .then(async () => {
-      await store.removeRecord(id.value)
-      showToast('已删除')
-      router.replace('/records')
-    })
-    .catch(() => {})
+  if (!ok) return
+  await store.removeRecord(id.value)
+  showToast('已删除')
+  router.replace('/records')
 }
 </script>
 

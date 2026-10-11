@@ -67,7 +67,7 @@
         <van-field v-model="draft.note" label="备注" placeholder="选填" maxlength="40" />
       </van-cell-group>
       <div class="pop-actions">
-        <van-button block round type="primary" @click="confirmAdd">确定新增</van-button>
+        <van-button block round type="primary" :loading="adding" :disabled="adding" @click="confirmAdd">确定新增</van-button>
       </div>
     </van-popup>
   </div>
@@ -76,8 +76,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showToast } from 'vant'
 import { useAppStore } from '@/stores/app'
+import { confirmAction } from '@/utils/dialog'
+import { runGuarded } from '@/utils/async'
 import type { Product } from '@/types'
 import { money, qty, round } from '@/utils/format'
 import { byProduct } from '@/utils/stats'
@@ -88,6 +90,7 @@ const store = useAppStore()
 
 const keyword = ref('')
 const showAdd = ref(false)
+const adding = ref(false)
 const draft = reactive({ name: '', spec: '', note: '' })
 
 onMounted(() => {
@@ -132,23 +135,23 @@ function openAdd() {
 
 async function confirmAdd() {
   if (!draft.name.trim()) return showToast('请填写产品名称')
-  const p = await store.addProduct({ name: draft.name, spec: draft.spec, note: draft.note })
-  showAdd.value = false
-  showToast('已新增产品')
-  router.push(`/product/${p.id}`)
+  await runGuarded(adding, async () => {
+    const p = await store.addProduct({ name: draft.name, spec: draft.spec, note: draft.note })
+    showAdd.value = false
+    showToast('已新增产品')
+    router.push(`/product/${p.id}`)
+  }, { label: '新增产品' })
 }
 
-function askRemove(p: Product) {
+async function askRemove(p: Product) {
   const count = store.records.filter((r) => r.productId === p.id).length
   const msg = count
     ? `「${p.name}」下已有 ${count} 条计件记录，删除后这些记录将显示为“已删除产品”，历史金额仍保留在统计中。确定删除吗？`
     : `确定删除产品「${p.name}」及其全部工序吗？`
-  showConfirmDialog({ title: '删除产品', message: msg })
-    .then(async () => {
-      await store.removeProduct(p.id, true)
-      showToast('已删除')
-    })
-    .catch(() => {})
+  const ok = await confirmAction({ title: '删除产品', message: msg })
+  if (!ok) return
+  await store.removeProduct(p.id, true)
+  showToast('已删除')
 }
 </script>
 

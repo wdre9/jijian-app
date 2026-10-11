@@ -68,10 +68,26 @@
           当前将导出 {{ scopeRecords.length }} 条记录，合计 ¥{{ money(scopeAmount) }}
         </div>
         <div class="btns">
-          <van-button type="primary" block round size="small" @click="exportDetailExcel">
+          <van-button
+            type="primary"
+            block
+            round
+            size="small"
+            :loading="exportingDetail"
+            :disabled="exportingDetail"
+            @click="exportDetailExcel"
+          >
             导出 Excel（.xlsx）
           </van-button>
-          <van-button plain block round size="small" @click="exportDetailCsv">
+          <van-button
+            plain
+            block
+            round
+            size="small"
+            :loading="exportingDetail"
+            :disabled="exportingDetail"
+            @click="exportDetailCsv"
+          >
             导出 CSV（.csv）
           </van-button>
         </div>
@@ -85,8 +101,17 @@
         <div class="fs-12 text-3">
           包含：按产品、按工序、按工人、按日期、按月 五张汇总表，适合发给老板核对工价。
         </div>
+        <div v-if="lastTip('summary')" class="recent-tip">最近导出：{{ lastTip('summary') }}</div>
         <div class="btns">
-          <van-button plain block round size="small" @click="exportSummaryExcel">
+          <van-button
+            plain
+            block
+            round
+            size="small"
+            :loading="exportingSummary"
+            :disabled="exportingSummary"
+            @click="exportSummaryExcel"
+          >
             导出汇总 Excel
           </van-button>
         </div>
@@ -102,6 +127,7 @@
         </div>
         <div class="bak" :class="{ 'bak--warn': needBackupReminder }">
           <div class="bak__t">{{ backupText ? '最近备份：' + backupText : '还没有导出过备份' }}</div>
+          <div v-if="lastTip('backup')" class="recent-tip">最近备份：{{ lastTip('backup') }}</div>
           <div class="bak__d">
             <template v-if="env.nativeApp">数据只保存在本机应用内，卸载应用会一并清除且无法恢复；建议每周导出一次，并保存到电脑或网盘。</template>
             <template v-else>数据只保存在本机浏览器，清理缓存或站点数据（含存储空间不足时的自动清理）可能一并清除且无法恢复；建议每周导出一次，并保存到电脑或网盘。</template>
@@ -112,8 +138,28 @@
           <div v-else class="bak__more">备份与还原见下方「导出 / 备份与还原」操作区</div>
         </div>
         <div class="btns">
-          <van-button plain block round size="small" @click="exportBackup">导出备份（.json）</van-button>
-          <van-button plain block round size="small" @click="pickFile">导入备份（覆盖现有数据）</van-button>
+          <van-button
+            plain
+            block
+            round
+            size="small"
+            :loading="exportingBackup"
+            :disabled="exportingBackup"
+            @click="exportBackup"
+          >
+            导出备份（.json）
+          </van-button>
+          <van-button
+            plain
+            block
+            round
+            size="small"
+            :loading="importing"
+            :disabled="importing"
+            @click="pickFile"
+          >
+            导入备份（覆盖现有数据）
+          </van-button>
         </div>
         <input
           ref="fileRef"
@@ -130,8 +176,27 @@
           <div class="card__title">演示与清空</div>
         </div>
         <div class="btns">
-          <van-button plain block round size="small" @click="loadDemo">载入演示数据</van-button>
-          <van-button plain block round size="small" type="danger" @click="askClear">
+          <van-button
+            plain
+            block
+            round
+            size="small"
+            :loading="demoLoading"
+            :disabled="demoLoading"
+            @click="loadDemo"
+          >
+            载入演示数据
+          </van-button>
+          <van-button
+            plain
+            block
+            round
+            size="small"
+            type="danger"
+            :loading="clearing"
+            :disabled="clearing"
+            @click="askClear"
+          >
             清空全部数据
           </van-button>
         </div>
@@ -146,8 +211,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showToast } from 'vant'
 import { useAppStore } from '@/stores/app'
+import { confirmAction } from '@/utils/dialog'
+import { runGuarded } from '@/utils/async'
 import type { BackupPackage } from '@/types'
 import { money, moneyShort, qty, round } from '@/utils/format'
 import { addDays, currentMonthKey, currentMonthRange, fileStamp, todayStr } from '@/utils/date'
@@ -162,6 +229,7 @@ import {
   sumQty
 } from '@/utils/stats'
 import { detailAoa, detailCsv, downloadJson, downloadText, exportWorkbook } from '@/utils/exporter'
+import type { ExportResult } from '@/utils/exporter'
 import {
   backupStatusText,
   markBackedUp,
@@ -181,6 +249,77 @@ const exportRanges: Array<{ label: string; value: ExportRange }> = [
   { label: '近 90 天', value: '90d' }
 ]
 const exportRange = ref<ExportRange>('all')
+
+/** 导出/导入/清空等写操作防重入标志 */
+const exportingDetail = ref(false)
+const exportingSummary = ref(false)
+const exportingBackup = ref(false)
+const importing = ref(false)
+const demoLoading = ref(false)
+const clearing = ref(false)
+
+/** 错误信息转可读文本 */
+function failText(err: unknown): string {
+  if (err instanceof Error) return err.message || err.name
+  return String(err)
+}
+
+/** File 读取为文本 */
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(reader.error || new Error('文件读取失败'))
+    reader.readAsText(file)
+  })
+}
+
+/** 成功提示（原生端追加保存位置，避免用户找不到文件） */
+function successTip(prefix: string, res: ExportResult): string {
+  return res.mode === 'native' ? `${prefix}，已保存至 ${res.display}` : prefix
+}
+
+/* ------------------------------ 最近导出记录 ------------------------------ */
+interface RecentExport {
+  kind: 'detail' | 'summary' | 'backup'
+  filename: string
+  location: string
+  at: number
+}
+
+const RECENT_KEY = 'jijian:recent-exports'
+
+function readRecentExports(): RecentExport[] {
+  try {
+    const raw = window.localStorage.getItem(RECENT_KEY)
+    if (!raw) return []
+    const arr = JSON.parse(raw) as RecentExport[]
+    return Array.isArray(arr) ? arr.slice(0, 5) : []
+  } catch {
+    return []
+  }
+}
+
+const recentExports = ref<RecentExport[]>(readRecentExports())
+
+function recordExport(kind: RecentExport['kind'], filename: string, location: string): void {
+  recentExports.value = [{ kind, filename, location, at: Date.now() }, ...recentExports.value].slice(0, 5)
+  try {
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(recentExports.value))
+  } catch {
+    /* 忽略：仅界面提示 */
+  }
+}
+
+/** 某类导出最近一次的人类可读提示，无记录时返回空串 */
+function lastTip(kind: RecentExport['kind']): string {
+  const item = recentExports.value.find((e) => e.kind === kind)
+  if (!item) return ''
+  const d = new Date(item.at)
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${item.filename} → ${item.location}（今天 ${hh}:${mm}）`
+}
 
 /** 最近一次导出备份的时间描述（未备份时为空串） */
 const backupText = computed(() => backupStatusText())
@@ -219,159 +358,218 @@ function scopeName(): string {
   return '全部'
 }
 
-function exportDetailExcel() {
-  const rows = enrich(
-    [...scopeRecords.value].sort((a, b) => (a.date < b.date ? -1 : 1)),
-    store.productMap,
-    store.processMap
-  )
-  exportWorkbook(
-    [{ name: '计件明细', aoa: detailAoa(rows, (id) => store.productMap.get(id)?.spec || '') }],
-    `计件明细_${scopeName()}_${fileStamp()}.xlsx`
-  )
-  showToast('已导出 Excel')
+async function exportDetailExcel() {
+  if (exportingDetail.value) return
+  exportingDetail.value = true
+  try {
+    const rows = enrich(
+      [...scopeRecords.value].sort((a, b) => (a.date < b.date ? -1 : 1)),
+      store.productMap,
+      store.processMap
+    )
+    const filename = `计件明细_${scopeName()}_${fileStamp()}.xlsx`
+    const res = await exportWorkbook(
+      [{ name: '计件明细', aoa: detailAoa(rows, (id) => store.productMap.get(id)?.spec || '') }],
+      filename
+    )
+    recordExport('detail', filename, res.mode === 'native' ? res.display : '浏览器下载')
+    showToast({ type: 'success', message: successTip('已导出 Excel', res) })
+  } catch (err) {
+    showToast({ type: 'fail', message: `导出 Excel 失败：${failText(err)}` })
+  } finally {
+    exportingDetail.value = false
+  }
 }
 
-function exportDetailCsv() {
-  const rows = enrich(
-    [...scopeRecords.value].sort((a, b) => (a.date < b.date ? -1 : 1)),
-    store.productMap,
-    store.processMap
-  )
-  downloadText(
-    detailCsv(rows, (id) => store.productMap.get(id)?.spec || ''),
-    `计件明细_${scopeName()}_${fileStamp()}.csv`
-  )
-  showToast('已导出 CSV')
+async function exportDetailCsv() {
+  if (exportingDetail.value) return
+  exportingDetail.value = true
+  try {
+    const rows = enrich(
+      [...scopeRecords.value].sort((a, b) => (a.date < b.date ? -1 : 1)),
+      store.productMap,
+      store.processMap
+    )
+    const filename = `计件明细_${scopeName()}_${fileStamp()}.csv`
+    const res = await downloadText(
+      detailCsv(rows, (id) => store.productMap.get(id)?.spec || ''),
+      filename
+    )
+    recordExport('detail', filename, res.mode === 'native' ? res.display : '浏览器下载')
+    showToast({ type: 'success', message: successTip('已导出 CSV', res) })
+  } catch (err) {
+    showToast({ type: 'fail', message: `导出 CSV 失败：${failText(err)}` })
+  } finally {
+    exportingDetail.value = false
+  }
 }
 
 /* ------------------------- 导出汇总 ------------------------- */
-function exportSummaryExcel() {
-  const rows = scopeRecords.value
-  const stamp = `${scopeName()}_${fileStamp()}`
+async function exportSummaryExcel() {
+  if (exportingSummary.value) return
+  exportingSummary.value = true
+  try {
+    const rows = scopeRecords.value
+    const stamp = `${scopeName()}_${fileStamp()}`
 
-  const sheets = [
-    {
-      name: '按产品',
-      aoa: [
-        [`计件汇总 — 按产品（${scopeName()}）`],
-        ['产品', '规格', '数量', '金额(元)', '笔数'],
-        ...byProduct(rows, store.productMap).map((r) => [r.label, r.sub || '', r.quantity, r.amount, r.times])
-      ]
-    },
-    {
-      name: '按工序',
-      aoa: [
-        [`计件汇总 — 按工序（${scopeName()}）`],
-        ['工序', '所属产品', '数量', '金额(元)', '笔数'],
-        ...byProcess(rows, store.processMap, store.productMap).map((r) => [
-          r.label,
-          r.sub || '',
-          r.quantity,
-          r.amount,
-          r.times
-        ])
-      ]
-    },
-    {
-      name: '按工人',
-      aoa: [
-        [`计件汇总 — 按工人（${scopeName()}）`],
-        ['工人', '数量', '金额(元)', '笔数'],
-        ...byWorker(rows).map((r) => [r.label, r.quantity, r.amount, r.times])
-      ]
-    },
-    {
-      name: '按日期',
-      aoa: [
-        [`计件汇总 — 按日期（${scopeName()}）`],
-        ['日期', '数量', '金额(元)', '笔数'],
-        ...byDate(rows).map((r) => [r.label, r.quantity, r.amount, r.times])
-      ]
-    },
-    {
-      name: '按月',
-      aoa: [
-        [`计件汇总 — 按月（${scopeName()}）`],
-        ['月份', '数量', '金额(元)', '有记录天数'],
-        ...Array.from(monthBuckets(rows).entries())
-          .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-          .map(([k, v]) => [k, round(v.qty, 2), round(v.amount, 2), v.dates.size])
-      ]
-    }
-  ]
+    const sheets = [
+      {
+        name: '按产品',
+        aoa: [
+          [`计件汇总 — 按产品（${scopeName()}）`],
+          ['产品', '规格', '数量', '金额(元)', '笔数'],
+          ...byProduct(rows, store.productMap).map((r) => [
+            r.label,
+            r.sub || '',
+            r.quantity,
+            r.amount,
+            r.times
+          ])
+        ]
+      },
+      {
+        name: '按工序',
+        aoa: [
+          [`计件汇总 — 按工序（${scopeName()}）`],
+          ['工序', '所属产品', '数量', '金额(元)', '笔数'],
+          ...byProcess(rows, store.processMap, store.productMap).map((r) => [
+            r.label,
+            r.sub || '',
+            r.quantity,
+            r.amount,
+            r.times
+          ])
+        ]
+      },
+      {
+        name: '按工人',
+        aoa: [
+          [`计件汇总 — 按工人（${scopeName()}）`],
+          ['工人', '数量', '金额(元)', '笔数'],
+          ...byWorker(rows).map((r) => [r.label, r.quantity, r.amount, r.times])
+        ]
+      },
+      {
+        name: '按日期',
+        aoa: [
+          [`计件汇总 — 按日期（${scopeName()}）`],
+          ['日期', '数量', '金额(元)', '笔数'],
+          ...byDate(rows).map((r) => [r.label, r.quantity, r.amount, r.times])
+        ]
+      },
+      {
+        name: '按月',
+        aoa: [
+          [`计件汇总 — 按月（${scopeName()}）`],
+          ['月份', '数量', '金额(元)', '有记录天数'],
+          ...Array.from(monthBuckets(rows).entries())
+            .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+            .map(([k, v]) => [k, round(v.qty, 2), round(v.amount, 2), v.dates.size])
+        ]
+      }
+    ]
 
-  exportWorkbook(sheets, `计件汇总_${stamp}.xlsx`)
-  showToast('汇总报表已导出')
+    const filename = `计件汇总_${stamp}.xlsx`
+    const res = await exportWorkbook(sheets, filename)
+    recordExport('summary', filename, res.mode === 'native' ? res.display : '浏览器下载')
+    showToast({ type: 'success', message: successTip('汇总报表已导出', res) })
+  } catch (err) {
+    showToast({ type: 'fail', message: `导出汇总失败：${failText(err)}` })
+  } finally {
+    exportingSummary.value = false
+  }
 }
 
 /* ------------------------- 备份 ------------------------- */
 async function exportBackup() {
-  const pkg = await store.exportBackup()
-  downloadJson(pkg, `计件记账备份_${fileStamp()}.json`)
-  markBackedUp()
-  showToast('备份已导出')
+  if (exportingBackup.value) return
+  exportingBackup.value = true
+  try {
+    const pkg = await store.exportBackup()
+    const filename = `计件记账备份_${fileStamp()}.json`
+    const res = await downloadJson(pkg, filename)
+    markBackedUp()
+    recordExport('backup', filename, res.mode === 'native' ? res.display : '浏览器下载')
+    showToast({ type: 'success', message: successTip('备份已导出', res) })
+  } catch (err) {
+    showToast({ type: 'fail', message: `导出备份失败：${failText(err)}` })
+  } finally {
+    exportingBackup.value = false
+  }
 }
 
 const fileRef = ref<HTMLInputElement | null>(null)
 
 function pickFile() {
+  if (importing.value) return
   fileRef.value?.click()
 }
 
-function onFileChange(e: Event) {
+async function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
-  const reader = new FileReader()
-  reader.onload = async () => {
+  input.value = ''
+  await runGuarded(importing, async () => {
+    let pkg: BackupPackage | null = null
     try {
-      const pkg = JSON.parse(String(reader.result)) as BackupPackage
-      if (!pkg || !pkg.data) throw new Error('bad')
-      const count = (pkg.data.records || []).length
-      showConfirmDialog({
-        title: '导入备份',
-        message: `将导入 ${count} 条记录及全部产品/工序/工人，并覆盖当前数据。确定继续吗？`,
-        confirmButtonText: '导入'
-      })
-        .then(async () => {
-          await store.importBackup(pkg)
-          showToast('导入成功')
-        })
-        .catch(() => {})
-    } catch (err) {
-      showToast('文件格式不正确，请选择本应用导出的备份文件')
-    } finally {
-      input.value = ''
+      pkg = JSON.parse(await readFileAsText(file)) as BackupPackage
+    } catch {
+      showToast({ type: 'fail', message: '文件格式不正确，请选择本应用导出的备份文件' })
+      return
     }
-  }
-  reader.readAsText(file)
+    if (!pkg || !pkg.data) {
+      showToast({ type: 'fail', message: '文件格式不正确，缺少备份数据' })
+      return
+    }
+    const count = (pkg.data.records || []).length
+    const confirmed = await confirmAction({
+      title: '导入备份',
+      message: `将导入 ${count} 条记录及全部产品/工序/工人，并覆盖当前数据。确定继续吗？`,
+      confirmButtonText: '导入'
+    })
+    if (!confirmed) return
+    try {
+      await store.importBackup(pkg)
+      showToast({ type: 'success', message: `导入成功：${count} 条记录及全部基础数据已恢复` })
+    } catch (err) {
+      showToast({ type: 'fail', message: `导入失败：${failText(err)}` })
+    }
+  }, { label: '导入' })
 }
 
 async function loadDemo() {
-  showConfirmDialog({
-    title: '载入演示数据',
-    message: '将新增 3 个示例产品、10 道工序与最近 12 天的示例记录，不会删除已有数据。确定继续吗？'
-  })
-    .then(async () => {
-      await store.loadDemoData()
-      showToast('演示数据已载入')
+  await runGuarded(demoLoading, async () => {
+    const confirmed = await confirmAction({
+      title: '载入演示数据',
+      message: '将新增 3 个示例产品、10 道工序与最近 12 天的示例记录，不会删除已有数据。确定继续吗？'
     })
-    .catch(() => {})
+    if (!confirmed) return
+    try {
+      await store.loadDemoData()
+      showToast({ type: 'success', message: '演示数据已载入' })
+    } catch (err) {
+      showToast({ type: 'fail', message: `载入演示数据失败：${failText(err)}` })
+    }
+  }, { label: '载入演示数据' })
 }
 
-function askClear() {
-  showConfirmDialog({
-    title: '清空全部数据',
-    message: '将删除全部计件记录、产品、工序与工人，操作不可恢复。确定清空吗？',
-    confirmButtonText: '全部清空',
-    confirmButtonColor: '#EE0A24'
-  })
-    .then(async () => {
-      await store.resetAll()
-      showToast('已清空')
+async function askClear() {
+  await runGuarded(clearing, async () => {
+    const confirmed = await confirmAction({
+      title: '清空全部数据',
+      message: '将删除全部计件记录、产品、工序与工人，操作不可恢复。确定清空吗？',
+      confirmButtonText: '全部清空',
+      confirmButtonColor: '#EE0A24'
     })
-    .catch(() => {})
+    if (!confirmed) return
+    try {
+      await store.resetAll()
+      showToast({ type: 'success', message: '已清空全部数据' })
+    } catch (err) {
+      showToast({ type: 'fail', message: `清空失败：${failText(err)}` })
+    }
+  }, { label: '清空' })
 }
 
 void moneyShort
@@ -429,6 +627,18 @@ void moneyShort
   flex-direction: column;
   gap: 9px;
   margin-top: 12px;
+}
+
+.recent-tip {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--app-radius-sm);
+  background: rgba(18, 156, 89, 0.08);
+  border: 1px solid rgba(18, 156, 89, 0.25);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--app-text-2);
+  word-break: break-all;
 }
 
 .hidden-file {

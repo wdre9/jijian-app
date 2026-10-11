@@ -88,6 +88,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
+import { showToast } from 'vant'
+import { runGuarded } from '@/utils/async'
 import type { ThemeMode } from '@/types'
 import { toNum } from '@/utils/format'
 import { env, openInstallGuide } from '@/utils/install'
@@ -119,11 +121,9 @@ function sync() {
   rememberLast.value = store.settings.rememberLast
 }
 
-let saving = false
+const saving = { value: false }
 async function persist() {
-  if (saving) return
-  saving = true
-  try {
+  await runGuarded(saving, async () => {
     await store.updateSettings({
       defaultWorker: form.defaultWorker.trim(),
       dailyGoal: toNum(dailyGoalStr.value) || 0,
@@ -131,9 +131,8 @@ async function persist() {
       theme: theme.value,
       rememberLast: rememberLast.value
     })
-  } finally {
-    saving = false
-  }
+    showToast('已保存')
+  }, { label: '保存' })
 }
 
 watch([theme, rememberLast], persist)

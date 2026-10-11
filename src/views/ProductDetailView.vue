@@ -130,7 +130,7 @@
         <van-field v-model="pDraft.note" label="备注" maxlength="40" />
       </van-cell-group>
       <div class="pop-actions">
-        <van-button block round type="primary" @click="confirmEditProduct">保存</van-button>
+        <van-button block round type="primary" :loading="savingProduct" :disabled="savingProduct" @click="confirmEditProduct">保存</van-button>
       </div>
     </van-popup>
 
@@ -155,7 +155,7 @@
         </van-cell>
       </van-cell-group>
       <div class="pop-actions">
-        <van-button block round type="primary" @click="confirmProc">保存</van-button>
+        <van-button block round type="primary" :loading="savingProc" :disabled="savingProc" @click="confirmProc">保存</van-button>
       </div>
     </van-popup>
   </div>
@@ -164,8 +164,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showToast } from 'vant'
 import { useAppStore } from '@/stores/app'
+import { confirmAction } from '@/utils/dialog'
 import { money, moneyShort, priceText, qty, round, toNum } from '@/utils/format'
 import { byProcess, enrich, sumAmount, sumQty } from '@/utils/stats'
 import EmptyState from '@/components/EmptyState.vue'
@@ -216,6 +217,7 @@ const recent = computed(() =>
 
 /* ---------------- 产品编辑 ---------------- */
 const showEditProduct = ref(false)
+const savingProduct = ref(false)
 const pDraft = reactive({ name: '', spec: '', note: '' })
 
 function openEditProduct() {
@@ -227,18 +229,25 @@ function openEditProduct() {
 }
 
 async function confirmEditProduct() {
+  if (savingProduct.value) return
   if (!pDraft.name.trim()) return showToast('请填写产品名称')
-  await store.updateProduct(pid.value, {
-    name: pDraft.name.trim(),
-    spec: pDraft.spec.trim(),
-    note: pDraft.note.trim()
-  })
-  showEditProduct.value = false
-  showToast('已保存')
+  savingProduct.value = true
+  try {
+    await store.updateProduct(pid.value, {
+      name: pDraft.name.trim(),
+      spec: pDraft.spec.trim(),
+      note: pDraft.note.trim()
+    })
+    showEditProduct.value = false
+    showToast('已保存')
+  } finally {
+    savingProduct.value = false
+  }
 }
 
 /* ---------------- 工序编辑 ---------------- */
 const showProc = ref(false)
+const savingProc = ref(false)
 const procEditId = ref('')
 const oDraft = reactive({ name: '', price: '', note: '', active: true })
 
@@ -263,38 +272,44 @@ function openEditProcess(id: string) {
 }
 
 async function confirmProc() {
+  if (savingProc.value) return
   if (!oDraft.name.trim()) return showToast('请填写工序名称')
   const price = round(toNum(oDraft.price), 4)
   if (!(price >= 0)) return showToast('单件工价不能为负')
-  if (procEditId.value) {
-    await store.updateProcess(procEditId.value, {
-      name: oDraft.name.trim(),
-      price,
-      note: oDraft.note.trim(),
-      active: oDraft.active
-    })
-  } else {
-    await store.addProcess({
-      productId: pid.value,
-      name: oDraft.name,
-      price,
-      note: oDraft.note,
-      active: oDraft.active
-    })
+  savingProc.value = true
+  try {
+    if (procEditId.value) {
+      await store.updateProcess(procEditId.value, {
+        name: oDraft.name.trim(),
+        price,
+        note: oDraft.note.trim(),
+        active: oDraft.active
+      })
+    } else {
+      await store.addProcess({
+        productId: pid.value,
+        name: oDraft.name,
+        price,
+        note: oDraft.note,
+        active: oDraft.active
+      })
+    }
+    showProc.value = false
+    showToast('已保存')
+  } finally {
+    savingProc.value = false
   }
-  showProc.value = false
-  showToast('已保存')
 }
 
 async function toggleActive(id: string, v: boolean) {
   await store.updateProcess(id, { active: v })
 }
 
-function askRemoveProcess(id: string) {
+async function askRemoveProcess(id: string) {
   const o = store.processMap.get(id)
   if (!o) return
   const count = store.records.filter((r) => r.processId === id).length
-  showConfirmDialog({
+  const ok = await confirmAction({
     title: '删除工序',
     message: count
       ? `工序「${o.name}」已有 ${count} 条记录，删除后这些记录仍保留（显示为“已删除工序”）。确定删除吗？`
@@ -302,11 +317,9 @@ function askRemoveProcess(id: string) {
     confirmButtonText: '删除',
     confirmButtonColor: '#EE0A24'
   })
-    .then(async () => {
-      await store.removeProcess(id, true)
-      showToast('已删除')
-    })
-    .catch(() => {})
+  if (!ok) return
+  await store.removeProcess(id, true)
+  showToast('已删除')
 }
 
 let addRecordLocked = false

@@ -259,7 +259,9 @@
   background: var(--app-card);
 }
 
-.van-popup {
+/* 排除 Toast：Toast 是 .van-popup.van-toast（默认黑底白字），
+   若不排除会被刷成白底白字导致提示完全隐形（v1.2.7 导出提示空白根因） */
+.van-popup:not(.van-toast) {
   background: var(--app-card);
 }
 

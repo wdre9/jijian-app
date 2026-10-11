@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
+import { closeDialog, closeToast } from 'vant'
 
 /**
  * 使用 Hash 路由：静态托管（GitHub Pages 等）无需任何服务端 rewrite 配置，
@@ -92,6 +93,17 @@ const router = createRouter({
   scrollBehavior() {
     return { top: 0 }
   }
+})
+
+/**
+ * 路由切换后统一清理命令式弹窗/轻提示：
+ * Vant showConfirmDialog 挂载在 body 级 overlay（z-index 2000+），
+ * 若在弹窗打开时通过底部导航等切走页面，overlay 不会自动销毁，
+ * 会残留拦截整屏点击（jijian-app 偶发"按键失灵"根因之一）。
+ */
+router.afterEach(() => {
+  closeDialog()
+  closeToast()
 })
 
 export default router

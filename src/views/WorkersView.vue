@@ -55,7 +55,7 @@
         <van-field v-model="name" label="姓名" placeholder="请输入工人姓名" maxlength="12" />
       </van-cell-group>
       <div class="pop-actions">
-        <van-button block round type="primary" @click="confirmAdd">确定</van-button>
+        <van-button block round type="primary" :loading="adding" :disabled="adding" @click="confirmAdd">确定</van-button>
       </div>
     </van-popup>
   </div>
@@ -64,8 +64,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showToast } from 'vant'
 import { useAppStore } from '@/stores/app'
+import { confirmAction } from '@/utils/dialog'
+import { runGuarded } from '@/utils/async'
 import { money, qty } from '@/utils/format'
 import { friendlyDate } from '@/utils/date'
 import EmptyState from '@/components/EmptyState.vue'
@@ -74,6 +76,7 @@ const router = useRouter()
 const store = useAppStore()
 
 const showAdd = ref(false)
+const adding = ref(false)
 const name = ref('')
 
 onMounted(() => {
@@ -111,15 +114,17 @@ function openAdd() {
 async function confirmAdd() {
   const n = name.value.trim()
   if (!n) return showToast('请输入姓名')
-  await store.addWorker(n)
-  if (!store.settings.defaultWorker) await store.updateSettings({ defaultWorker: n })
-  showAdd.value = false
-  showToast('已新增')
+  await runGuarded(adding, async () => {
+    await store.addWorker(n)
+    if (!store.settings.defaultWorker) await store.updateSettings({ defaultWorker: n })
+    showAdd.value = false
+    showToast('已新增')
+  }, { label: '新增' })
 }
 
-function askRemove(n: string) {
+async function askRemove(n: string) {
   const used = store.records.filter((r) => r.worker === n).length
-  showConfirmDialog({
+  const ok = await confirmAction({
     title: '删除工人',
     message: used
       ? `「${n}」已有 ${used} 条计件记录，删除后记录仍保留，统计不受影响。确定删除吗？`
@@ -127,12 +132,10 @@ function askRemove(n: string) {
     confirmButtonText: '删除',
     confirmButtonColor: '#EE0A24'
   })
-    .then(async () => {
-      await store.removeWorker(n)
-      if (store.settings.defaultWorker === n) await store.updateSettings({ defaultWorker: '' })
-      showToast('已删除')
-    })
-    .catch(() => {})
+  if (!ok) return
+  await store.removeWorker(n)
+  if (store.settings.defaultWorker === n) await store.updateSettings({ defaultWorker: '' })
+  showToast('已删除')
 }
 </script>
 

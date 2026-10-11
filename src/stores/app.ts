@@ -5,6 +5,10 @@ import * as db from '@/db'
 import { maybeAutoBackup } from '@/utils/autobackup'
 import { round, uid } from '@/utils/format'
 import { todayStr, weekRange, currentMonthRange } from '@/utils/date'
+import { withTimeout } from '@/utils/async'
+
+/** 冷启动初始化兜底超时（毫秒）：超时基于空文档+内存态继续，ready 强制置 true */
+const INIT_TIMEOUT_MS = 10000
 
 /** 新增/编辑记录时的输入结构 */
 export interface RecordInput {
@@ -18,6 +22,22 @@ export interface RecordInput {
   note: string
   /** 可选：金额覆盖（批量导入时三位小数原样存储；缺省按 数量×单价 重算两位） */
   amount?: number
+}
+
+/** 批量导入单行（来自文本/OCR 解析草稿） */
+export interface BulkRow {
+  date: string
+  productName: string
+  processName: string
+  quantity: number
+  price: number
+  worker: string
+  shift: 'day' | 'night'
+  note: string
+  /** 可选：金额覆盖 */
+  amount?: number
+  /** 原始行文本，失败时用于回显 */
+  raw?: string
 }
 
 export const useAppStore = defineStore('app', () => {
@@ -38,7 +58,8 @@ export const useAppStore = defineStore('app', () => {
   async function init(force = false): Promise<void> {
     if (ready.value && !force) return
     try {
-      const doc = await db.loadDoc()
+      // 冷启动兜底：loadDoc 最多等待 10s，超时基于空文档 + 内存态继续，ready 强制置 true
+      const doc = await withTimeout(db.loadDoc(), INIT_TIMEOUT_MS, () => db.emptyDoc())
       docCache = doc
       records.value = doc.records
       products.value = doc.products
@@ -55,7 +76,11 @@ export const useAppStore = defineStore('app', () => {
 
   /** 全量持久化：内存态 -> 单文档 -> 落盘（落盘后触发自动备份钩子） */
   async function persist(): Promise<void> {
-    if (!docCache) return
+    if (!docCache) {
+      // 防御：初始化未成功（如 IndexedDB 读取异常）时基于当前内存态重建文档，
+      // 避免 docCache 为空导致静默跳过落盘、退出应用后数据全部丢失。
+      docCache = db.emptyDoc()
+    }
     docCache.records = records.value
     docCache.products = products.value
     docCache.processes = processes.value
@@ -165,6 +190,93 @@ export const useAppStore = defineStore('app', () => {
     const set = new Set(ids)
     records.value = records.value.filter((r) => !set.has(r.id))
     await persist()
+  }
+
+  /**
+   * 批量导入：逐条容错地构建内存数据（产品/工序自动建，缺失字段兜底），
+   * 全部变更完成后只做一次全量持久化，避免逐条 await persist() 在 WebView 中
+   * 连续全量写 IndexedDB 中断导致"只导入部分、后续全部丢失"。
+   * 单条构建失败不中断整体，失败明细随结果返回。
+   */
+  async function bulkImport(
+    rows: BulkRow[]
+  ): Promise<{ ok: number; failed: Array<{ row: string; reason: string }> }> {
+    const failed: Array<{ row: string; reason: string }> = []
+    let ok = 0
+    let lastProductId = ''
+    let lastProcessId = ''
+    const newWorkers = new Set<string>()
+
+    for (const input of rows) {
+      try {
+        const code = input.productName.trim()
+        let product = products.value.find((p) => p.name === code)
+        if (!product) {
+          product = {
+            id: uid('p'),
+            name: code,
+            spec: '',
+            note: '',
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }
+          products.value.push(product)
+        }
+        const pname = input.processName.trim() || '未分类'
+        let process = processes.value.find((o) => o.productId === product.id && o.name === pname)
+        if (!process) {
+          process = {
+            id: uid('o'),
+            productId: product.id,
+            name: pname,
+            price: round(input.price, 4),
+            note: '',
+            active: true,
+            sort: processesOfProduct(product.id).length,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }
+          processes.value.push(process)
+        }
+        const now = Date.now()
+        records.value.push({
+          id: uid('r'),
+          date: input.date.trim(),
+          productId: product.id,
+          processId: process.id,
+          quantity: round(input.quantity, 2),
+          price: round(input.price, 4),
+          amount: input.amount !== undefined ? round(input.amount, 3) : calcAmount(input.quantity, input.price),
+          worker: (input.worker || '').trim(),
+          shift: input.shift,
+          note: input.note || '',
+          createdAt: now,
+          updatedAt: now
+        })
+        lastProductId = product.id
+        lastProcessId = process.id
+        const w = (input.worker || '').trim()
+        if (w) newWorkers.add(w)
+        ok++
+      } catch (e) {
+        failed.push({
+          row: input.raw || `${input.date.trim()} ${input.productName.trim()}`,
+          reason: e instanceof Error ? e.message : String(e)
+        })
+      }
+    }
+
+    for (const name of newWorkers) {
+      if (!workers.value.some((w) => w.name === name)) {
+        workers.value.push({ name, createdAt: Date.now() })
+      }
+    }
+    if (settings.value.rememberLast && lastProductId) {
+      settings.value = { ...settings.value, lastProductId, lastProcessId }
+    }
+
+    await persist()
+    return { ok, failed }
   }
 
   /* ----------------------------- 产品操作 ----------------------------- */
@@ -447,6 +559,7 @@ export const useAppStore = defineStore('app', () => {
     // actions
     init,
     addRecord,
+    bulkImport,
     updateRecord,
     removeRecord,
     removeRecords,

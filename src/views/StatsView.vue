@@ -160,7 +160,7 @@
         <van-button size="small" round plain block :loading="capturing" @click="exportImage">
           {{ capturing ? '生成中…' : '导出统计长图' }}
         </van-button>
-        <van-button size="small" round plain block @click="exportExcel">导出统计 Excel</van-button>
+        <van-button size="small" round plain block :loading="exportingExcel" :disabled="exportingExcel" @click="exportExcel">导出统计 Excel</van-button>
       </div>
       <div class="fs-12 text-3 mt-8">
         Excel 含：明细、按产品、按工序、按工人、按日期 五张表；长图适合直接发群里汇报。
@@ -175,6 +175,7 @@ import { showToast } from 'vant'
 import VChart from 'vue-echarts'
 import html2canvas from 'html2canvas'
 import { useAppStore } from '@/stores/app'
+import { withTimeout, runGuarded } from '@/utils/async'
 import type { SummaryRow } from '@/types'
 import { money, moneyShort, percent, priceText, qty, round } from '@/utils/format'
 import {
@@ -546,93 +547,110 @@ function percentOf(amount: number): string {
 /* ----------------------------- 导出 ----------------------------- */
 const captureRef = ref<HTMLElement | null>(null)
 const capturing = ref(false)
+const exportingExcel = ref(false)
 
 async function exportImage() {
   const el = captureRef.value
   if (!el) return
-  capturing.value = true
   try {
-    await nextTick()
-    await new Promise((r) => setTimeout(r, 350))
-    const canvas = await html2canvas(el, {
-      backgroundColor: '#ffffff',
-      scale: Math.min(2, window.devicePixelRatio || 1) + 1,
-      useCORS: true,
-      logging: false
-    })
-    const url = canvas.toDataURL('image/png')
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `计件统计_${resolved.value.start}_${resolved.value.end}_${fileStamp()}.png`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    showToast('统计长图已导出')
+    await runGuarded(capturing, async () => {
+      await nextTick()
+      await new Promise((r) => setTimeout(r, 350))
+      const canvas = await withTimeout(
+        html2canvas(el, {
+          backgroundColor: '#ffffff',
+          scale: Math.min(2, window.devicePixelRatio || 1) + 1,
+          useCORS: true,
+          logging: false
+        }),
+        10_000,
+        () => {
+          throw new Error('统计长图生成超时，请重试')
+        }
+      )
+      const url = canvas.toDataURL('image/png')
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `计件统计_${resolved.value.start}_${resolved.value.end}_${fileStamp()}.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      showToast('统计长图已导出')
+    }, { label: '导出统计长图' })
   } catch (e) {
     showToast('长图生成失败，请重试')
-  } finally {
-    capturing.value = false
   }
 }
 
-function exportExcel() {
-  const records = [...rangeRecords.value].sort((a, b) => (a.date < b.date ? -1 : 1))
-  const enriched = enrich(records, store.productMap, store.processMap)
+async function exportExcel() {
+  if (exportingExcel.value) return
+  exportingExcel.value = true
+  try {
+    const records = [...rangeRecords.value].sort((a, b) => (a.date < b.date ? -1 : 1))
+    const enriched = enrich(records, store.productMap, store.processMap)
 
-  const aoaSummary = (
-    title: string,
-    header: string[],
-    rows: SummaryRow[],
-    map?: (r: SummaryRow) => Array<string | number>
-  ): Array<Array<string | number>> => [
-    [title],
-    header,
-    ...rows.map((r) => (map ? map(r) : [r.label, r.quantity, r.amount, r.times])),
-    [],
-    ['导出时间', formatDateTime(Date.now())]
-  ]
+    const aoaSummary = (
+      title: string,
+      header: string[],
+      rows: SummaryRow[],
+      map?: (r: SummaryRow) => Array<string | number>
+    ): Array<Array<string | number>> => [
+      [title],
+      header,
+      ...rows.map((r) => (map ? map(r) : [r.label, r.quantity, r.amount, r.times])),
+      [],
+      ['导出时间', formatDateTime(Date.now())]
+    ]
 
-  exportWorkbook(
-    [
-      { name: '明细', aoa: detailAoa(enriched, (id) => store.productMap.get(id)?.spec || '') },
-      {
-        name: '按产品',
-        aoa: aoaSummary(
-          `${rangeLabel.value} — 按产品`,
-          ['产品', '规格', '数量', '金额(元)', '笔数'],
-          byProduct(records, store.productMap),
-          (r) => [r.label, r.sub || '', r.quantity, r.amount, r.times]
-        )
-      },
-      {
-        name: '按工序',
-        aoa: aoaSummary(
-          `${rangeLabel.value} — 按工序`,
-          ['工序', '所属产品', '数量', '金额(元)', '笔数'],
-          byProcess(records, store.processMap, store.productMap),
-          (r) => [r.label, r.sub || '', r.quantity, r.amount, r.times]
-        )
-      },
-      {
-        name: '按工人',
-        aoa: aoaSummary(
-          `${rangeLabel.value} — 按工人`,
-          ['工人', '数量', '金额(元)', '笔数'],
-          byWorker(records)
-        )
-      },
-      {
-        name: '按日期',
-        aoa: aoaSummary(
-          `${rangeLabel.value} — 按日期`,
-          ['日期', '数量', '金额(元)', '笔数'],
-          byDate(records)
-        )
-      }
-    ],
-    `计件统计_${resolved.value.start}_${resolved.value.end}_${fileStamp()}.xlsx`
-  )
-  showToast('统计 Excel 已导出')
+    const res = await exportWorkbook(
+      [
+        { name: '明细', aoa: detailAoa(enriched, (id) => store.productMap.get(id)?.spec || '') },
+        {
+          name: '按产品',
+          aoa: aoaSummary(
+            `${rangeLabel.value} — 按产品`,
+            ['产品', '规格', '数量', '金额(元)', '笔数'],
+            byProduct(records, store.productMap),
+            (r) => [r.label, r.sub || '', r.quantity, r.amount, r.times]
+          )
+        },
+        {
+          name: '按工序',
+          aoa: aoaSummary(
+            `${rangeLabel.value} — 按工序`,
+            ['工序', '所属产品', '数量', '金额(元)', '笔数'],
+            byProcess(records, store.processMap, store.productMap),
+            (r) => [r.label, r.sub || '', r.quantity, r.amount, r.times]
+          )
+        },
+        {
+          name: '按工人',
+          aoa: aoaSummary(
+            `${rangeLabel.value} — 按工人`,
+            ['工人', '数量', '金额(元)', '笔数'],
+            byWorker(records)
+          )
+        },
+        {
+          name: '按日期',
+          aoa: aoaSummary(
+            `${rangeLabel.value} — 按日期`,
+            ['日期', '数量', '金额(元)', '笔数'],
+            byDate(records)
+          )
+        }
+      ],
+      `计件统计_${resolved.value.start}_${resolved.value.end}_${fileStamp()}.xlsx`
+    )
+    showToast({
+      type: 'success',
+      message: res.mode === 'native' ? `统计 Excel 已导出，已保存至 ${res.display}` : '统计 Excel 已导出'
+    })
+  } catch (err) {
+    showToast({ type: 'fail', message: `导出统计 Excel 失败：${err instanceof Error ? err.message : String(err)}` })
+  } finally {
+    exportingExcel.value = false
+  }
 }
 </script>
 
