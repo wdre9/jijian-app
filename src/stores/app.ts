@@ -621,7 +621,7 @@ export const useAppStore = defineStore('app', () => {
   }))
 
   /** 工人聚合统计（分层缓存：聚合下沉到 store 层 computed，避免视图层每次遍历全部 records）
-   * times 语义：记录条数（每遍历一条 record +1）。自动模式一条记录=1 笔；手动模式一行=1 次即件数，UI 统一标「次」 */
+   * times 语义：记录条数（每条 +1，不区分 auto/manual）。WorkersView 标签为「笔」；注意与 stats.ts SummaryRow.times（manual 累加 count = 次数）语义不同。 */
   const workerStats = computed<Map<string, { quantity: number; amount: number; times: number; lastDate: string }>>(() => {
     const map = new Map<string, { quantity: number; amount: number; times: number; lastDate: string }>()
     for (const r of records.value) {
