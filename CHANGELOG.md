@@ -5,6 +5,15 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.3.0] - 2026-10-12
+
+### 变更
+
+- Android 审查整改 A1-A28 全部落地，覆盖界面可访问性、数据一致性、异常兜底与代码健壮性等专项修复。
+- 文档 D 类刷新：D1/D2/D3/D5/D6/D7/D8 同步更新，与当前实现保持一致。
+- 4 项复查问题修复：DataView 存储用量重复计算修正、StatsView/HomeView 跨午夜自动刷新、times 标签与注释语义对齐。
+- 版本号升级至 1.3.0（versionCode 11）。
+
 ## [1.2.9] - 2026-10-12
 
 ### 新增
