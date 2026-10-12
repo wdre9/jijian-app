@@ -10,7 +10,7 @@ import { daysBetween, todayStr, toDateStr } from '@/utils/date'
 export interface DraftRow {
   /** YYYY-MM-DD */
   date: string
-  /** 四位货号 = 产品名 */
+  /** 四位货号或「计时」= 产品名 */
   productCode: string
   /** 工序名，无工序为「未分类」 */
   processName: string
@@ -27,7 +27,7 @@ export interface DraftRow {
 
 export interface ParseResult {
   rows: DraftRow[]
-  /** 「计时」等跳过的行数 */
+  /** 标题/表头等跳过的行数 */
   skippedCount: number
   /** 无法解析的原始行（无日期上下文 / 无货号 / 无 ×数量×单价） */
   unparsed: string[]
@@ -80,26 +80,65 @@ function matchHeaderDate(line: string, today: string): { date: string; rest: str
 
 /** 四位数字 = 货号（行首或前接逗号/空格等分隔符；「3500×0.1=350」中的数量不视为货号） */
 const CODE_RE = /(?:^|[^\d])(\d{4})(?!\d)/
-/** 数量×单价=金额（OCR 常见 ×/* 混用，= 可能为全角；半角拉丁 x 刻意不支持，避免破坏含 x 的工序/产品名；兼容「×数量×单价=金额」的前导 ×） */
-const QTY_PRICE_RE = /(?:^|[^\d.])(\d+(?:\.\d+)?)\s*[×*]\s*(\d+(?:\.\d+)?)\s*[=:：]\s*(\d+(?:\.\d+)?)/
+/** 「计时」= 独立货号（产品名），与四位数字货号同等对待，如「10.9，计时，11×11.3=124.3」；行首或前接逗号/空格/空白符 */
+const JISHI_CODE_RE = /(?:^|[,，\s])(计时)/
+/** 数量×单价=金额（OCR 常见 ×/* 混用，= 可能为全角；半角拉丁 x 刻意不支持，避免破坏含 x 的工序/产品名；从数字本身开始匹配，前导 × 由 cleanProcessSuffix 前缀清理兜底，避免把「二夹623…」的「夹」吞进表达式） */
+const QTY_PRICE_RE = /(\d+(?:\.\d+)?)\s*[×*]\s*(\d+(?:\.\d+)?)\s*[=:：]\s*(\d+(?:\.\d+)?)/
 /** 标题/表头特征行（非账目内容，如「2026年10月计件明细」） */
 const TITLE_RE = /年|明细|汇总|合计|总计|小计|报表|工资|对账|记账/
 /** 尾部残留的 ×数量（无单价） */
 const TRAIL_QTY_RE = /×\s*\d+(?:\.\d+)?\s*$/
-/** 尾部角标 +8 等 */
-const TRAIL_TAG_RE = /[+＋⁺]\s*\d+(?:\.\d+)?\s*$/
-/** 行首角标 +8 等（货号后紧跟） */
-const LEAD_TAG_RE = /^[+＋⁺]\s*\d+(?:\.\d+)?\s*/
+/** 角标 +8 / ⁺⁵ 等（任意位置；归一化后形如 +N，工序中间的角标同样需要清理，如「cnc+5」→「cnc」） */
+const TAG_RE = /[+＋⁺]\s*\d+(?:\.\d+)?/g
+/** OCR 序号前缀（如「13. 」「14. 」）：后跟非数字或日期（如「13. 10.11」）时剥离，避免误伤「10.11」日期头 */
+const SEQ_RE = /^\d{1,3}[.、．]\s+(?=\D|\d{1,2}[.、．／/]\d{1,2})/
 
 function cleanProcessSuffix(rest: string): string {
   return rest
     .replace(QTY_PRICE_RE, '')
     .replace(TRAIL_QTY_RE, '')
-    .replace(TRAIL_TAG_RE, '')
-    .replace(LEAD_TAG_RE, '')
-    .replace(/^[\s\-·、,，:：.]+/, '')
-    .replace(/[\s\-·、,，:：.]+$/, '')
+    .replace(TAG_RE, '')
+    .replace(/^[\s\-·、,，:：.×*]+/, '')
+    .replace(/[\s\-·、,，:：.×*]+$/, '')
     .trim()
+}
+
+/**
+ * OCR 常把「日期 货号 工序」与「工序 数量×单价=金额」两行合并成一行（换行丢失），
+ * 表现为一行里逗号分隔多段、账目只出现在最后一段，如：
+ *   10.11, 9854cnc+5, 一夹623×0.094=58.567
+ * 这里按账目前文本的逗号/分号拆成多行：前面各段作为上下文行（货号/工序），
+ * 最后一段与账目合并成真正的账目行，使「cnc / 一夹 / 二夹」各归其位。
+ */
+function expandMergedLines(lines: string[], today: string): string[] {
+  const out: string[] = []
+  for (const line of lines) {
+    const lineNoSeq = line.replace(SEQ_RE, '')
+    const hd = matchHeaderDate(lineNoSeq, today)
+    const rest0 = hd ? hd.rest : lineNoSeq
+    const qp0 = rest0.match(QTY_PRICE_RE)
+    if (!qp0) {
+      out.push(lineNoSeq)
+      continue
+    }
+    const prefix = rest0.slice(0, qp0.index)
+    const segs = prefix.split(/[,，;；]/)
+    if (segs.length < 2) {
+      out.push(lineNoSeq)
+      continue
+    }
+    const datePre = hd ? lineNoSeq.slice(0, lineNoSeq.length - rest0.length) : ''
+    let first = true
+    for (let i = 0; i < segs.length - 1; i++) {
+      const seg = segs[i].trim()
+      if (!seg) continue
+      out.push(datePre && first ? `${datePre} ${seg}` : seg)
+      first = false
+    }
+    const lastSeg = segs[segs.length - 1].trim()
+    out.push(lastSeg + rest0.slice(qp0.index))
+  }
+  return out
 }
 
 export function parseImportText(rawText: string, worker = ''): ParseResult {
@@ -111,17 +150,15 @@ export function parseImportText(rawText: string, worker = ''): ParseResult {
   let currentCode = ''
 
   const today = todayStr()
-  const lines = normalizeText(rawText)
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
+  const lines = expandMergedLines(
+    normalizeText(rawText)
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean),
+    today
+  )
 
   for (const line of lines) {
-    if (line.includes('计时')) {
-      skippedCount++
-      continue
-    }
-
     // 1) 行首日期头（日期后可能还跟着货号/账目内容）
     let rest = line
     const hd = matchHeaderDate(line, today)
@@ -143,11 +180,15 @@ export function parseImportText(rawText: string, worker = ''): ParseResult {
       if (!isQtyItself) currentCode = code
     }
 
+    // 3b) 「计时」独立货号（无四位数字货号时，行首或前接逗号/空格/空白符的「计时」视为货号）
+    const jishiMatch = !codeMatch ? rest.match(JISHI_CODE_RE) : null
+    if (jishiMatch) currentCode = '计时'
+
     // 4) 纯日期头行（日期后无任何内容）→ 仅设定日期
     if (hd && !rest.trim()) continue
 
     // 5) 标题/表头行：无账目、无货号但像标题 → 自动跳过（不再堆进「未能解析」）
-    if (!qp && !codeMatch) {
+    if (!qp && !codeMatch && !jishiMatch) {
       if (TITLE_RE.test(rest)) {
         skippedCount++
         continue
@@ -172,8 +213,13 @@ export function parseImportText(rawText: string, worker = ''): ParseResult {
     // 工序后缀：优先从行首货号之后取；若本行没有货号（数量行继承货号），从行首取
     const qtyStart = (qp.index ?? 0) + qp[0].indexOf(qp[1])
     const codeStart = codeMatch ? (codeMatch.index ?? 0) + codeMatch[0].lastIndexOf(codeMatch[1]) : -1
-    const hasHeadCode = codeMatch && codeStart !== qtyStart
-    const suffix = hasHeadCode ? rest.slice(codeMatch![0].length) : rest
+    const hasHeadCode = codeMatch ? codeStart !== qtyStart : !!jishiMatch
+    let suffix = rest
+    if (hasHeadCode) {
+      suffix = codeMatch
+        ? rest.slice((codeMatch!.index ?? 0) + codeMatch![0].length)
+        : rest.slice((jishiMatch!.index ?? 0) + jishiMatch![0].length)
+    }
     const processName = cleanProcessSuffix(suffix) || '未分类'
 
     rows.push({
