@@ -45,6 +45,12 @@ function normalizeText(s: string): string {
     .replace(/／/g, '/')
     .replace(/．/g, '.')
     .replace(/、/g, '、')
+    // 上标字符归一：¹²³ 在 Latin-1 区(U+00B9/B2/B3)，⁰⁴⁵⁶⁷⁸⁹ 在 U+2070 区，码位不连续，逐字符映射
+    .replace(/⁰/g, '0').replace(/¹/g, '1').replace(/²/g, '2')
+    .replace(/³/g, '3').replace(/⁴/g, '4').replace(/⁵/g, '5')
+    .replace(/⁶/g, '6').replace(/⁷/g, '7').replace(/⁸/g, '8')
+    .replace(/⁹/g, '9').replace(/⁺/g, '+').replace(/⁻/g, '-')
+    .replace(/⁼/g, '=')
 }
 
 /* ----------------------------- 日期解析 ----------------------------- */
@@ -81,9 +87,9 @@ const TITLE_RE = /年|明细|汇总|合计|总计|小计|报表|工资|对账|�
 /** 尾部残留的 ×数量（无单价） */
 const TRAIL_QTY_RE = /×\s*\d+(?:\.\d+)?\s*$/
 /** 尾部角标 +8 等 */
-const TRAIL_TAG_RE = /[+＋]\s*\d+(?:\.\d+)?\s*$/
+const TRAIL_TAG_RE = /[+＋⁺]\s*\d+(?:\.\d+)?\s*$/
 /** 行首角标 +8 等（货号后紧跟） */
-const LEAD_TAG_RE = /^[+＋]\s*\d+(?:\.\d+)?\s*/
+const LEAD_TAG_RE = /^[+＋⁺]\s*\d+(?:\.\d+)?\s*/
 
 function cleanProcessSuffix(rest: string): string {
   return rest
