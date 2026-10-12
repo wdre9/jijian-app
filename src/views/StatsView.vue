@@ -112,7 +112,7 @@
                 <div class="rank__fill" :style="{ width: rankPct(w.amount) + '%' }"></div>
               </div>
               <div class="rank__sub">
-                {{ qty(w.quantity) }} 件 · {{ w.times }} 笔 · 占 {{ percentOf(w.amount) }}
+                {{ qty(w.quantity) }} 件 · {{ w.times }} 次 · 占 {{ percentOf(w.amount) }}
               </div>
             </div>
           </div>
@@ -134,7 +134,7 @@
           >
             <div class="shift__name">{{ s.label }}</div>
             <div class="shift__amount num">¥{{ money(s.amount) }}</div>
-            <div class="shift__meta">{{ qty(s.quantity) }} 件 · {{ s.times }} 笔</div>
+            <div class="shift__meta">{{ qty(s.quantity) }} 件 · {{ s.times }} 次</div>
           </div>
         </div>
       </div>
@@ -170,7 +170,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { showToast } from 'vant'
 import VChart from 'vue-echarts'
 import html2canvas from 'html2canvas'
@@ -266,7 +266,23 @@ const rangeLabel = computed(
 
 const days = computed(() => dateList(resolved.value.start, resolved.value.end).length)
 
-const nowText = computed(() => formatDateTime(Date.now()))
+// 响应式时钟：每分钟 tick 一次，驱动 nowText 等时间相关 computed 在跨午夜后自动重算
+const clock = ref(Date.now())
+let clockTimer: number | undefined
+onMounted(() => {
+  clockTimer = window.setInterval(() => {
+    clock.value = Date.now()
+  }, 60_000)
+})
+onUnmounted(() => {
+  if (clockTimer !== undefined) window.clearInterval(clockTimer)
+})
+
+// 跨午夜自动刷新：nowText 依赖 clock，跨天后自动重算当前时间
+const nowText = computed(() => {
+  void clock.value
+  return formatDateTime(Date.now())
+})
 
 /* ----------------------------- 数据 ----------------------------- */
 const rangeRecords = computed(() =>

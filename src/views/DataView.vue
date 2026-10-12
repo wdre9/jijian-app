@@ -342,21 +342,27 @@ const rangeText = computed(() => dateSpan.value)
 const amountAll = computed(() => sumAmount(store.records))
 const qtyAll = computed(() => sumQty(store.records))
 
+/** localStorage 占用估算（键名 + 值长度按 UTF-16 计） */
+function localStorageBytes(): number {
+  let lsBytes = 0
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const k = window.localStorage.key(i)
+    if (!k) continue
+    const v = window.localStorage.getItem(k)
+    lsBytes += (k.length + (v ? v.length : 0)) * 2
+  }
+  return lsBytes
+}
+
 /** 本地存储用量估算（浏览器 localStorage 上限约 5MB，接近时引导导出归档） */
 const storageUsageText = computed(() => {
   try {
-    const docBytes = new Blob([JSON.stringify(store.doc)]).size
-    let lsBytes = 0
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const k = window.localStorage.key(i)
-      if (!k) continue
-      const v = window.localStorage.getItem(k)
-      lsBytes += (k.length + (v ? v.length : 0)) * 2
-    }
-    const total = docBytes + lsBytes
-    const kb = (total / 1024).toFixed(1)
+    // 文档 JSON（jijian-pwa/jijian-doc/jijian-doc 键）本身就在 localStorage 中，
+    // 直接以 localStorage 总量为准，不再叠加 docBytes，避免重复计算
+    const lsBytes = localStorageBytes()
+    const kb = (lsBytes / 1024).toFixed(1)
     const limit = 5 * 1024 * 1024
-    const pct = Math.round((total / limit) * 100)
+    const pct = Math.round((lsBytes / limit) * 100)
     if (pct >= 50) {
       return `本地数据约 ${kb} KB，已达存储上限约 5MB 的 ${pct}%，建议在下方导出备份并定期归档旧记录`
     }
@@ -367,8 +373,8 @@ const storageUsageText = computed(() => {
 })
 const storageUsageWarn = computed(() => {
   try {
-    const docBytes = new Blob([JSON.stringify(store.doc)]).size
-    return docBytes >= 5 * 1024 * 1024 * 0.5
+    // 与 storageUsageText 同口径：以 localStorage 总量判断是否接近 5MB 上限
+    return localStorageBytes() >= 5 * 1024 * 1024 * 0.5
   } catch {
     return false
   }

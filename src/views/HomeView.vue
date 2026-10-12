@@ -157,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import type { RecordRow } from '@/types'
@@ -192,8 +192,23 @@ const rangeOptions = [
   { label: '本月', value: 'month' }
 ]
 
-// 跨午夜自动刷新：setup 时只算一次会在跨天后显示错误日期，改为 computed 按需重算
-const today = computed(() => todayStr())
+// 响应式时钟：每分钟 tick 一次，驱动 today 等时间相关 computed 在跨午夜后自动重算
+const clock = ref(Date.now())
+let clockTimer: number | undefined
+onMounted(() => {
+  clockTimer = window.setInterval(() => {
+    clock.value = Date.now()
+  }, 60_000)
+})
+onUnmounted(() => {
+  if (clockTimer !== undefined) window.clearInterval(clockTimer)
+})
+
+// 跨午夜自动刷新：today 依赖 clock，跨天后自动重算日期
+const today = computed(() => {
+  void clock.value
+  return todayStr()
+})
 
 const greeting = computed(() => {
   const h = new Date().getHours()

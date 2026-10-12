@@ -120,6 +120,7 @@ export interface SummaryRow {
   sub?: string
   quantity: number
   amount: number
+  /** 次数/笔数：手动模式=累加 count（每行 1 次，即件数）；自动模式=记录条数（一条记录=1 笔） */
   times: number
 }
 
