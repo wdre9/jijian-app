@@ -84,23 +84,14 @@ onMounted(() => {
 })
 
 const list = computed(() => {
-  const map = new Map<string, { quantity: number; amount: number; times: number; lastDate: string }>()
-  store.records.forEach((r) => {
-    const key = r.worker || '未填写'
-    const cur = map.get(key) || { quantity: 0, amount: 0, times: 0, lastDate: '' }
-    cur.quantity += Number(r.quantity) || 0
-    cur.amount += Number(r.amount) || 0
-    cur.times += 1
-    if (r.date > cur.lastDate) cur.lastDate = r.date
-    map.set(key, cur)
-  })
-
+  // 聚合由 store.workerStats 分层缓存提供，records 不变时不重复遍历全部记录
+  const stats = store.workerStats
   const names = new Set<string>(store.workerOptions)
-  Array.from(map.keys()).forEach((n) => names.add(n))
+  Array.from(stats.keys()).forEach((n) => names.add(n))
 
   return Array.from(names)
     .map((n) => {
-      const s = map.get(n) || { quantity: 0, amount: 0, times: 0, lastDate: '' }
+      const s = stats.get(n) || { quantity: 0, amount: 0, times: 0, lastDate: '' }
       return { name: n, ...s }
     })
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name))

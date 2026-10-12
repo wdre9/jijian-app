@@ -84,5 +84,11 @@ export function uid(prefix = ''): string {
 
 /** 深拷贝（结构化数据） */
 export function clone<T>(v: T): T {
-  return JSON.parse(JSON.stringify(v)) as T
+  try {
+    // structuredClone 保留 Date/Map/Set 等类型且性能更优
+    return structuredClone(v)
+  } catch {
+    // 环境不支持或值不可克隆（函数/Symbol 等）时回退 JSON 往返
+    return JSON.parse(JSON.stringify(v)) as T
+  }
 }

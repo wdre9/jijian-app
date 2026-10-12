@@ -620,6 +620,21 @@ export const useAppStore = defineStore('app', () => {
     settings: settings.value
   }))
 
+  /** 工人聚合统计（分层缓存：聚合下沉到 store 层 computed，避免视图层每次遍历全部 records） */
+  const workerStats = computed<Map<string, { quantity: number; amount: number; times: number; lastDate: string }>>(() => {
+    const map = new Map<string, { quantity: number; amount: number; times: number; lastDate: string }>()
+    for (const r of records.value) {
+      const key = r.worker || '未填写'
+      const cur = map.get(key) || { quantity: 0, amount: 0, times: 0, lastDate: '' }
+      cur.quantity += Number(r.quantity) || 0
+      cur.amount += Number(r.amount) || 0
+      cur.times += 1
+      if (r.date > cur.lastDate) cur.lastDate = r.date
+      map.set(key, cur)
+    }
+    return map
+  })
+
   const recordsInRange = (start: string, end: string) =>
     records.value.filter((r) => r.date >= start && r.date <= end)
 
@@ -650,6 +665,7 @@ export const useAppStore = defineStore('app', () => {
     todayRecords,
     quickProcesses,
     doc,
+    workerStats,
     // helpers
     productName,
     processName,
